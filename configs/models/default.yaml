@@ -1,0 +1,52 @@
+# configs/models/default.yaml
+# Default model and hyperparameter configuration.
+# Override per-experiment in configs/experiments/
+
+detector:
+  model: yolov8n.pt
+  conf_threshold: 0.30
+  device: cuda
+
+tracker:
+  tracker_type: bytetrack
+  track_thresh: 0.30
+  track_buffer: 30
+  match_thresh: 0.80
+  frame_rate: 30
+
+embeddings:
+  model: ViT-B/32
+  device: cuda
+  normalize: true
+
+semantic_memory:
+  decay_lambda: 0.90
+  embedding_dim: 512
+
+drift:
+  alpha: 0.50     # embedding drift weight
+  beta: 0.30      # object drift weight
+  gamma: 0.20     # tracking drift weight
+  # Constraint: alpha + beta + gamma = 1.0
+
+policy:
+  name: threshold
+  tau_low: 0.15   # below → Tier 1 (cache)
+  tau_high: 0.40  # above → Tier 3 (full VLM)
+
+scheduler:
+  force_every_n: 300      # force VLM call every N frames
+  min_interval: 5         # minimum frames between VLM calls
+
+cache:
+  max_frames_cached: 150  # stale cache threshold (~5s at 30fps)
+
+vlm:
+  model_id: vikhyatk/moondream2
+  revision: "2024-08-26"
+  device: cuda
+  dtype: float16          # float32 for CPU
+
+robotic_layer:
+  tau_stable: 0.10        # drift < this → STABLE
+  tau_dynamic: 0.35       # drift < this → DYNAMIC, else CRITICAL
