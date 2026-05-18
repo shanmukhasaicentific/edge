@@ -42,10 +42,10 @@ cache:
   max_frames_cached: 150  # stale cache threshold (~5s at 30fps)
 
 vlm:
+  name: moondream           # registry key: moondream / qwen_3b / qwen_7b / qwen_7b_4bit
   model_id: vikhyatk/moondream2
-  revision: "2024-08-26"
   device: cuda
-  dtype: float16          # float32 for CPU
+  dtype: float16            # float32 for CPU
 
 robotic_layer:
   tau_stable: 0.10        # drift < this → STABLE

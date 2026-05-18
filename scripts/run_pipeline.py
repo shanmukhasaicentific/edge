@@ -46,7 +46,7 @@ from src.semantic_memory.drift import SemanticDriftEstimator
 from src.policies.adaptive_policy import build_policy
 from src.scheduler.semantic_cache import SemanticCache
 from src.scheduler.vlm_scheduler import VLMScheduler, ComputeTier
-from src.vlm.moondream_wrapper import MoondreamWrapper
+from src.vlm.vlm_factory import build_vlm, list_vlms
 from src.robotics.perception_layer import RoboticPerceptionLayer
 from src.evaluation.evaluator import Evaluator, FrameRecord
 
@@ -61,6 +61,18 @@ def parse_args():
     parser.add_argument("--experiment_name", type=str, default="run")
     parser.add_argument("--output_dir", type=str, default="experiments/default/")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+
+    # VLM selection
+    parser.add_argument("--vlm", type=str, default="moondream",
+                        choices=["moondream", "qwen_3b", "qwen_7b", "qwen_7b_4bit"],
+                        help="Which VLM to use. moondream=fast baseline. qwen_7b=recommended for Kaggle 2xT4.")
+    parser.add_argument("--vlm_device", type=str, default=None,
+                        help="Device for VLM. Default: same as --device. "
+                             "Use 'auto' for device_map across 2xT4. "
+                             "Use 'cuda:1' to dedicate GPU1 to VLM.")
+    parser.add_argument("--use_4bit", action="store_true",
+                        help="Enable 4-bit quantization for Qwen VLMs. "
+                             "Reduces VRAM ~40%% at slight quality cost.")
 
     # Threshold policy args
     parser.add_argument("--tau_low", type=float, default=0.15)
@@ -142,7 +154,12 @@ def main():
 
     vlm = None
     if not args.skip_vlm:
-        vlm = MoondreamWrapper(device=args.device)
+        vlm_device = args.vlm_device or args.device
+        vlm = build_vlm(
+            name=args.vlm,
+            device=vlm_device,
+            use_4bit=args.use_4bit,
+        )
         vlm.load()
 
     # ─── Open video ───────────────────────────────────────────────────────

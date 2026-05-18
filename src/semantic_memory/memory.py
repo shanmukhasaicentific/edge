@@ -17,6 +17,14 @@ historical context — critical for detecting slow semantic drift.
 
 The memory acts as a reference point: if the current embedding
 drifts far from memory, a VLM call is warranted.
+
+This persistent memory serves a similar conceptual role to QueST's
+persistent semantic queries — both maintain a stable semantic reference
+across time to detect drift from the scene's established identity.
+The key architectural difference: QueST uses learnable query embeddings
+that attend globally via cross-attention; we use an exponentially decayed
+running average of CLIP embeddings. Our approach is far lighter,
+requiring no training, making it suitable for edge deployment.
 """
 
 from dataclasses import dataclass, field
