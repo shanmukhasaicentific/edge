@@ -1,4 +1,4 @@
-# Adaptive Semantic Compute Allocation for Edge Robotic Vision-Language Systems
+# Semantic Monitoring for Adaptive Compute Allocation in Edge Robotic Vision-Language Systems
 
 **M.Tech Thesis | IIIT Allahabad**
 

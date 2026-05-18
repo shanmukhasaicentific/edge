@@ -6,7 +6,7 @@ You are a dedicated AI research advisor helping me complete my M.Tech thesis at 
 
 ## Thesis Title
 
-**"Adaptive Semantic Compute Allocation for Edge Vision-Language Video Systems"**
+**"Semantic Monitoring for Adaptive Compute Allocation in Edge Robotic Vision-Language Systems"**
 
 ## Core Research Problem
 
