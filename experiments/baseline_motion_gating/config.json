@@ -1,0 +1,20 @@
+{
+  "video": "/home/shanmukhasai/Downloads/video.mp4",
+  "policy": "motion_gating",
+  "experiment_name": "baseline_motion_gating",
+  "output_dir": "experiments/baseline_motion_gating/",
+  "device": "cuda",
+  "tau_low": 0.15,
+  "tau_high": 0.4,
+  "interval": 30,
+  "motion_threshold": 10.0,
+  "tau": 0.3,
+  "alpha": 0.5,
+  "beta": 0.3,
+  "gamma": 0.2,
+  "decay_lambda": 0.9,
+  "max_frames": 300,
+  "skip_vlm": true,
+  "save_embeddings": false,
+  "verbose": true
+}
