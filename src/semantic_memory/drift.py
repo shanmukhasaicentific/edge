@@ -3,42 +3,23 @@ src/semantic_memory/drift.py
 
 Semantic Drift Estimator.
 
-Computes representation-level semantic drift D_t — the core signal
-that drives adaptive compute allocation in this system.
-
 Core formulation:
     D_t = α·D_embed + β·D_objects + γ·D_track
 
 Where:
-    D_embed   = representation-level cosine drift between CLIP embeddings
-    D_objects = object-level novelty score (class-set and count change)
-    D_track   = tracking identity change score (object entry/exit)
+    D_embed   = cosine distance between current and memory CLIP embeddings
+    D_objects = object novelty score (class-set change + count change)
+    D_track   = ByteTrack identity change score (new/lost tracks)
 
     α, β, γ ≥ 0  and  α + β + γ = 1  (weights sum to 1)
 
 D_t ∈ [0, 1] (clipped).
 
 Design rationale:
-    - D_embed is the primary representation-level signal. Captures holistic
-      semantic scene change in CLIP embedding space — robust to lighting,
-      viewpoint changes, and visual noise that pixel metrics would overreact to.
-    - D_objects captures object-level semantic novelty: a new class entering
-      the scene is a semantic event even if D_embed is moderate.
-    - D_track captures movement dynamics: persons entering or leaving the
-      scene are semantically significant for robotic perception tasks.
-
-Note on silent semantic drift:
-    Per-frame D_t may stay below τ_high while the scene drifts semantically
-    over many frames (e.g. a robot arm slowly moving, a person gradually
-    picking up an object). The SemanticMonitor (monitoring.py) accumulates
-    D_t over time to detect this silent drift — this module provides the
-    per-frame signal that the monitor accumulates.
-
-Note on anchor-based drift:
-    D_t here is computed against the temporal memory M_t (decayed average).
-    The SemanticMonitor also computes drift from semantic anchors — fixed
-    reference points set at TRANSITION and NOVEL events. Use
-    SemanticMonitor.anchor_drift(embedding) for anchor-based measurement.
+    - D_embed captures holistic semantic scene change
+    - D_objects captures object-level novelty (new class enters scene)
+    - D_track captures movement dynamics (people entering/leaving)
+    Combining all three makes the drift signal richer than any single component.
 """
 
 from dataclasses import dataclass
