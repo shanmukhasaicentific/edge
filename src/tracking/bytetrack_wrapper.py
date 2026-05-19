@@ -54,7 +54,7 @@ class ByteTrackWrapper:
         match_thresh: float = 0.8,
         frame_rate: int = 30,
     ):
-        from boxmot import ByteTrack
+        from boxmot.trackers.bytetrack.bytetrack import ByteTrack
 
         self.tracker = ByteTrack(
             track_thresh=track_thresh,
