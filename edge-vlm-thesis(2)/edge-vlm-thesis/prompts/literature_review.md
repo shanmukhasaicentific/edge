@@ -67,7 +67,3 @@ Organize related work into sections:
 ## Gap Statement Template
 
 > "While [related work] reduces [X], none address the problem of **semantic reasoning redundancy** — the unnecessary re-invocation of expensive VLM inference when semantic state has not meaningfully changed. Our work is the first to define and optimize this form of computational waste through formal semantic drift modeling and adaptive multi-tier compute allocation."
-
-
-https://arxiv.org/html/2604.22554v1
-used the above paper to understand about the semantic progress function 

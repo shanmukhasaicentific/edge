@@ -1,0 +1,54 @@
+# Edge VLM Thesis — .gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Model weights
+checkpoints/
+*.pt
+*.pth
+*.onnx
+*.bin
+*.safetensors
+
+# Large data
+datasets/
+cached_embeddings/
+*.mp4
+*.avi
+*.mov
+
+# Experiment outputs (keep configs, not raw results)
+experiments/*/frame_log.csv
+experiments/*/metrics.json
+
+# Results (track plots, not raw CSVs unless small)
+results/plots/
+results/metrics/
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# HuggingFace cache
+~/.cache/huggingface/
+
+# OS
+.DS_Store
+Thumbs.db
