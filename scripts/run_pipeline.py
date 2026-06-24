@@ -49,6 +49,8 @@ from src.scheduler.vlm_scheduler import VLMScheduler, ComputeTier
 from src.vlm.vlm_factory import build_vlm, list_vlms
 from src.robotics.perception_layer import RoboticPerceptionLayer
 from src.evaluation.evaluator import Evaluator, FrameRecord
+from src.semantic_memory.monitoring import SemanticMonitor
+from src.observatory.live_collector import LiveObservatoryCollector
 
 
 def parse_args():
@@ -101,6 +103,13 @@ def parse_args():
     parser.add_argument("--save_embeddings", action="store_true", help="Cache embeddings to disk")
     parser.add_argument("--verbose", action="store_true")
 
+    # Observatory integration
+    parser.add_argument("--observatory", action="store_true",
+                        help="Enable live semantic observatory. Generates full "
+                             "analysis + figures + dashboard after the run.")
+    parser.add_argument("--observatory_downsample", type=int, default=3,
+                        help="Plot every Nth frame in observatory figures (default 3 for speed)")
+
     return parser.parse_args()
 
 
@@ -150,6 +159,18 @@ def main():
     evaluator = Evaluator(
         experiment_name=args.experiment_name,
         policy_name=args.policy,
+    )
+
+    # Semantic Monitor (QueST-inspired semantic state classifier)
+    semantic_monitor = SemanticMonitor(
+        tau_low=args.tau_low,
+        tau_high=args.tau_high,
+    )
+
+    # Observatory live collector (enabled via --observatory flag)
+    obs_collector = LiveObservatoryCollector(
+        enabled=getattr(args, "observatory", False),
+        flush_every=500 if getattr(args, "verbose", False) else 0,
     )
 
     vlm = None
@@ -212,8 +233,18 @@ def main():
             tracking_result=track_result,
         )
 
-        # ── Adaptive Compute Policy ──
-        decision = scheduler.decide(drift=drift_components.d_total, frame_id=frame_id)
+        # ── Semantic Monitoring (QueST-inspired state classification) ──
+        monitor_result = semantic_monitor.update(
+            drift_components=drift_components,
+            current_embedding=embedding,
+            detections=det_result.detections,
+        )
+
+        # ── Adaptive Compute Policy (uses effective_drift from monitor) ──
+        decision = scheduler.decide(
+            drift=monitor_result.effective_drift,
+            frame_id=frame_id,
+        )
 
         # ── VLM Invocation (Tier 2 or 3) ──
         cache_hit = False
@@ -247,6 +278,8 @@ def main():
             vlm_caption=current_vlm_output if vlm_called else None,
             cache_hit=cache_hit,
             compute_tier=int(decision.tier),
+            semantic_state=monitor_result.semantic_state.value,
+            vlm_invoked=vlm_called,
         )
 
         # ── Record Frame ──
@@ -261,11 +294,22 @@ def main():
             tier=int(decision.tier),
             vlm_called=vlm_called,
             cache_hit=cache_hit,
-            vlm_output=current_vlm_output[:200],  # truncate for CSV
+            vlm_output=current_vlm_output[:200],
             latency_ms=latency_ms,
             n_detections=len(det_result.detections),
             n_tracks=len(track_result.tracks),
         ))
+
+        # ── Observatory Live Collection ──
+        obs_collector.record(
+            frame_id=frame_id,
+            drift_components=drift_components,
+            monitor_result=monitor_result,
+            scheduler_decision=decision,
+            percept=percept,
+            latency_ms=latency_ms,
+            vlm_output=current_vlm_output if vlm_called else "",
+        )
 
         if args.verbose and frame_id % 30 == 0:
             print(
@@ -301,6 +345,14 @@ def main():
     print(f"  Tier distribution:   T1={metrics.tier1_frames} T2={metrics.tier2_frames} T3={metrics.tier3_frames}")
     print(f"{'='*50}")
     print(f"  Results: {args.output_dir}")
+
+    # ─── Observatory Finalize ─────────────────────────────────────────────
+    if getattr(args, "observatory", False):
+        print(f"\n[Pipeline] Running semantic observatory analysis...")
+        obs_collector.finalize(
+            output_dir=os.path.join(args.output_dir, "observatory"),
+            run_observatory=True,
+        )
 
 
 if __name__ == "__main__":
