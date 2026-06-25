@@ -1,6 +1,5 @@
 # Adaptive Semantic Compute Allocation for Edge Robotic Vision-Language Systems
 
-**M.Tech Thesis | IIIT Allahabad**
 
 ---
 
