@@ -1,0 +1,211 @@
+\chapter{Introduction}
+\label{ch:introduction}
+
+\begin{chapterabstract}
+This chapter situates the thesis within the rapidly evolving landscape of
+embodied artificial intelligence, where vision-language models are
+increasingly deployed on resource-constrained robotic platforms. It
+identifies the central inefficiency that motivates this work --- the
+repeated invocation of expensive multimodal reasoning even when the
+semantic content of a scene is essentially unchanged --- and frames the
+research question, objectives, and contributions around the reduction of
+this \emph{semantic reasoning redundancy}.
+\end{chapterabstract}
+
+\section{Background and Contemporary Context}
+\label{sec:intro-background}
+
+The convergence of large-scale vision-language models (VLMs) with mobile
+robotic platforms has opened a new frontier in embodied perception. Models
+such as CLIP~\cite{Radford2021CLIP}, BLIP-2~\cite{Li2023BLIP2}, and
+LLaVA~\cite{Liu2023LLaVA} couple visual encoders with language reasoning to
+produce open-vocabulary scene descriptions, answer questions about an
+environment, and ground natural-language instructions in physical
+affordances. When integrated into robotic control stacks --- as in
+RT-2~\cite{Brohan2023RT2}, SayCan~\cite{Ahn2022SayCan}, and
+OpenVLA~\cite{Kim2024OpenVLA} --- these models allow a robot to interpret its
+surroundings with a flexibility that hand-engineered perception pipelines
+cannot match.
+
+This expressive power, however, carries a substantial computational price.
+A single forward pass through a modern VLM may involve billions of
+floating-point operations, hundreds of milliseconds of latency, and several
+gigabytes of accelerator memory. On the consumer-grade and embedded
+accelerators typical of edge robots --- as opposed to the data-centre GPUs on
+which these models are trained --- such costs translate directly into reduced
+battery life, thermal throttling, and an inability to maintain real-time
+perception rates. The tension between the semantic richness of VLMs and the
+strict energy, latency, and memory envelopes of edge robotics is the
+defining systems challenge addressed by this thesis.
+
+Crucially, a robot perceiving a continuous video stream does not encounter a
+sequence of independent, equally informative images. Consecutive frames are
+strongly correlated: a robot pausing in a corridor, waiting for a door to
+open, or observing a static workspace produces long runs of frames whose
+\emph{semantic} content barely changes even as raw pixels fluctuate with
+sensor noise, illumination, and minor camera motion. The opportunity that
+this thesis exploits is the gap between \emph{pixel-level} change and
+\emph{semantic-level} change: the former is frequent and cheap to measure,
+whereas the latter is rare and is what actually warrants fresh multimodal
+reasoning.
+
+\section{The Core Problem: Semantic Reasoning Redundancy}
+\label{sec:intro-problem}
+
+Contemporary robotic VLM systems overwhelmingly adopt a \emph{stateless,
+per-frame} invocation discipline: each incoming frame, or every $K$-th frame
+under a fixed sampling schedule, is passed to the VLM regardless of whether
+the scene has meaningfully evolved since the last invocation. This design is
+simple and reproducible, but it is profoundly wasteful. When a robot stares
+at an unchanging scene for several seconds, a per-frame policy re-derives the
+same caption or answer dozens of times, consuming accelerator cycles and
+energy to produce information the system already possesses.
+
+We term this inefficiency \emph{semantic reasoning redundancy}: the repeated
+expenditure of heavyweight multimodal compute on inputs whose semantic state
+is, for all practical purposes, identical to a previously reasoned-over
+state. It is conceptually distinct from the redundancies that prior efficiency
+research targets. Pixel- and frame-level redundancy --- addressed by adaptive
+frame sampling~\cite{Wu2019AdaFrame}, salient-clip
+selection~\cite{Korbar2019SCSampler}, and skip
+convolutions~\cite{Habibian2021Skip} --- concerns whether the raw signal has
+changed. Parameter redundancy --- addressed by
+quantization~\cite{Dettmers2022LLMint8}, pruning and
+compression~\cite{Han2016DeepCompression}, and
+distillation~\cite{Hinton2015Distillation} --- concerns whether a model is
+larger than it needs to be. Neither asks the question at the heart of this
+work: \emph{given what the system already understands about the scene, does
+the next frame justify the cost of multimodal reasoning at all?}
+
+Answering this question requires the system to maintain an explicit,
+continuously updated notion of \emph{semantic state}, to quantify how far the
+current observation has drifted from that state, and to allocate compute in
+proportion to that drift. A scene that is semantically stable should be
+served almost for free from memory; a scene undergoing a genuine semantic
+transition --- a new object entering view, an agent leaving the frame, a task-relevant
+change in configuration --- should trigger full reasoning. The absence of such a
+mechanism in mainstream pipelines is the gap this thesis fills.
+
+\section{Research Motivation and the Need for Semantic-Aware Scheduling}
+\label{sec:intro-motivation}
+
+Three observations motivate a semantic-aware scheduling approach.
+
+\paragraph{Observation 1: Semantic change is bursty, not uniform.}
+In realistic robotic deployments, semantically significant events are sparse
+and clustered in time, separated by long quiescent intervals. A compute
+policy that spends a fixed budget per frame is therefore mismatched to the
+underlying signal: it over-provisions during quiescence and may
+under-provision during bursts. A policy that tracks semantic drift can shift
+budget from the former to the latter.
+
+\paragraph{Observation 2: Cheap signals can predict the value of expensive
+reasoning.}
+Lightweight perception primitives that already run on edge robots --- a
+nano-scale object detector~\cite{Jocher2023YOLOv8}, a multi-object
+tracker~\cite{Zhang2022ByteTrack}, and a compact image
+embedding~\cite{Radford2021CLIP} --- jointly summarise the scene at a small
+fraction of a VLM's cost. Changes in these cheap signals are strong proxies
+for the kind of semantic change that warrants invoking the VLM. The cost of
+\emph{deciding} whether to reason can thus be made far smaller than the cost
+of reasoning itself.
+
+\paragraph{Observation 3: Most useful outputs are reusable.}
+Because the semantic state changes slowly, the textual output of a VLM
+remains valid for the duration of a stable interval. Caching the most recent
+output and reusing it while drift remains below a threshold preserves the
+information delivered to downstream robotic tasks while eliminating redundant
+computation.
+
+Taken together, these observations argue for a \emph{monitor-then-allocate}
+architecture: a lightweight semantic monitor runs every frame, estimates a
+scalar drift signal, and a scheduling policy maps that signal to a discrete
+compute tier ranging from cache reuse (no VLM) to full multimodal reasoning.
+This thesis designs, implements, and evaluates such an architecture.
+
+\section{Statement of Core Research Objectives}
+\label{sec:intro-objectives}
+
+The work is organised around the following research question:
+
+\begin{quote}
+\itshape How can semantic state transitions be used to dynamically control
+multimodal compute allocation in edge robotic vision systems, while
+preserving the semantic fidelity of the perception delivered to downstream
+tasks?
+\end{quote}
+
+This question is decomposed into four concrete objectives:
+
+\begin{enumerate}
+  \item \textbf{Formalise semantic state and semantic drift.} Define a
+  composite semantic-state representation from cheap per-frame signals
+  (embedding, object metadata, tracking identities) and a corresponding
+  scalar drift measure that is bounded, interpretable, and sensitive to
+  task-relevant change.
+  \item \textbf{Design an adaptive compute-allocation policy.} Map the drift
+  signal onto a small set of compute tiers via interpretable thresholds, such
+  that compute is spent in proportion to semantic novelty.
+  \item \textbf{Implement an edge-deployable pipeline.} Engineer a modular
+  system that integrates frame filtering, detection, tracking, embedding,
+  temporal memory, drift estimation, scheduling, caching, and selective VLM
+  invocation, suitable for execution on commodity accelerators.
+  \item \textbf{Evaluate against principled baselines.} Quantify the
+  trade-off between compute saved and semantic fidelity retained, comparing
+  the proposed scheduler against every-frame, uniform-sampling, motion-gating,
+  and embedding-only policies using a unified metric of \emph{semantic compute
+  efficiency}.
+\end{enumerate}
+
+\section{Summary of Scientific Contributions}
+\label{sec:intro-contributions}
+
+The principal contributions of this thesis are:
+
+\begin{itemize}
+  \item \textbf{A formulation of semantic reasoning redundancy} as a
+  first-class efficiency target for edge VLM systems, distinct from the
+  pixel-, frame-, and parameter-level redundancies addressed by prior work
+  (Chapter~\ref{ch:literature}).
+  \item \textbf{A composite semantic-drift model} $D_t = \alpha D_{\text{embed}}
+  + \beta D_{\text{objects}} + \gamma D_{\text{track}}$ that fuses embedding
+  distance, object-set novelty, and tracking-identity change into a single
+  bounded signal, together with a temporal semantic memory that suppresses
+  spurious drift from sensor noise (Chapter~\ref{ch:methods}).
+  \item \textbf{A three-tier adaptive compute-allocation policy} that maps
+  drift to cache reuse, lightweight reasoning, or full reasoning through
+  interpretable thresholds $\tau_{\text{low}}$ and $\tau_{\text{high}}$
+  (Chapter~\ref{ch:methods}).
+  \item \textbf{A modular, edge-oriented reference implementation} and the
+  \emph{Semantic Compute Efficiency} (SCE) metric that normalises retained
+  semantic fidelity by compute cost, enabling fair comparison across policies
+  (Chapters~\ref{ch:architecture} and~\ref{ch:experiments}).
+  \item \textbf{A Semantic Observatory and a methodology for discovering
+  scheduling policies.} Rather than positing a single hand-tuned heuristic,
+  this thesis contributes an instrument --- the Semantic Observatory --- that
+  derives a suite of semantic-evolution signals (drift, velocity,
+  acceleration, volatility, scene entropy, object persistence, stability and
+  transition regions) from a pipeline run, and a disciplined
+  observe--hypothesise--modify-one-thing--evaluate protocol that uses these
+  signals to \emph{discover and validate} scheduling policies from evidence
+  (Sections~\ref{sec:meth-observatory} and~\ref{sec:arch-observatory}). The
+  scientific contribution is thus a methodology for studying semantic
+  evolution and deriving policies, not merely one scheduler.
+\end{itemize}
+
+\section{Thesis Document Organization}
+\label{sec:intro-organization}
+
+The remainder of this thesis is organised as follows.
+Chapter~\ref{ch:literature} reviews vision-language modelling, efficient and
+edge inference, temporal redundancy reduction, object detection and tracking,
+and adaptive computation, positioning the present work against each.
+Chapter~\ref{ch:methods} develops the proposed methodology: the semantic-state
+representation, temporal memory, drift estimator, tiered scheduling policy,
+and the SCE metric. Chapter~\ref{ch:architecture} describes the software
+architecture and engineering design, detailing each component and the
+per-frame control flow. Chapter~\ref{ch:experiments} presents the
+experimental setup, baselines, evaluation metrics, quantitative results, and
+an ablation study. Chapter~\ref{ch:conclusion} synthesises the findings,
+discusses trade-offs and limitations, and outlines directions for future
+research. Appendix~\ref{app:operational} provides a reproducibility manual.

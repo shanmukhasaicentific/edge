@@ -1,0 +1,255 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Masters/Doctoral Thesis
+% LaTeX Template
+%
+% This template was downloaded from:
+% http://www.LaTeXTemplates.com
+%
+% Version 2.x major modifications by:
+% Vel (vel@latextemplates.com)
+%
+% Original Authors:
+% Vel (vel@latextemplates.com)
+% Johannes Böttcher
+% Steve Gunn (http://users.ecs.soton.ac.uk/srg/softwaretools/document/templates/)
+% Sunil Patel (http://www.sunilpatel.co.uk/thesis-template/)
+%
+% This template was modified by Muneendra Ojha to suit the needs of
+% IIIT Allahabad Students.
+%
+% Template license:
+% CC BY-NC-SA 3.0 (http://creativecommons.org/licenses/by-nc-sa/3.0/)
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%----------------------------------------------------------------------------------------
+%	PACKAGES AND OTHER DOCUMENT CONFIGURATIONS
+%----------------------------------------------------------------------------------------
+
+\documentclass[
+12pt,
+oneside,
+english,
+onehalfspacing,
+nolistspacing,
+liststotoc,
+toctotoc,
+headsepline,
+]{Thesis}
+
+% Load font packages FIRST
+% Fonts are loaded by filename (resolved via kpathsea from the tex-gyre
+% package) rather than by an absolute path, so the document compiles
+% unchanged on Overleaf, MiKTeX, and TeX Live without editing any path.
+\usepackage{fontspec}
+\usepackage{unicode-math}
+\setmainfont{texgyretermes}[
+  Extension      = .otf,
+  UprightFont    = *-regular,
+  BoldFont       = *-bold,
+  ItalicFont     = *-italic,
+  BoldItalicFont = *-bolditalic,
+  Ligatures      = TeX,
+  Numbers        = OldStyle,
+]
+\setmathfont{texgyretermes-math.otf}
+\setsansfont{texgyreheros}[
+  Extension      = .otf,
+  UprightFont    = *-regular,
+  BoldFont       = *-bold,
+  ItalicFont     = *-italic,
+  BoldItalicFont = *-bolditalic,
+]
+\setmonofont{texgyrecursor}[
+  Extension   = .otf,
+  UprightFont = *-regular,
+  BoldFont    = *-bold,
+  ItalicFont  = *-italic,
+]
+
+% Polyglossia for Hindi text
+\usepackage{polyglossia}
+\setmainlanguage{english}
+\setotherlanguage{hindi}
+\newfontfamily\devanagarifont[
+  Path=./,
+  Script=Devanagari
+]{NotoSerifDevanagari.ttf}
+
+\usepackage{amsmath, amsthm}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{listings}
+\usepackage{xcolor}
+
+% Figures: TikZ / PGFPlots render all diagrams and charts at compile time,
+% so no external image generation tool is required.
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, fit, backgrounds, calc}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{graphicx}
+
+% Graceful fallback: if an institutional image (logo / header band) is not
+% present in Figures/, draw a labelled placeholder box instead of failing to
+% compile. Replace the placeholders by dropping the official IIITA assets
+% (IIITA_Logo.png, IIITA_Header.png) into the Figures/ directory.
+\newcommand{\safeimage}[3][width=4cm]{%
+  \IfFileExists{#2}{\includegraphics[#1]{#2}}{%
+    \fbox{\parbox[c][2.2cm][c]{0.55\textwidth}{\centering\itshape\small
+      [#3]\\(place \texttt{\detokenize{#2}} here)}}%
+  }%
+}
+
+\usepackage[
+    backend=biber,
+    style=numeric,
+    sorting=none,
+    bibencoding=utf8,
+]{biblatex}
+
+\defbibheading{subbibliography}[\refname]{%
+    \clearpage%
+    \section*{#1}%
+    \addcontentsline{toc}{section}{#1}%
+    \markright{#1}%
+}
+
+\addbibresource{example.bib}
+\usepackage[autostyle=true]{csquotes}
+
+%----------------------------------------------------------------------------------------
+%	MARGIN SETTINGS
+%----------------------------------------------------------------------------------------
+
+\geometry{
+    paper=a4paper,
+    left=35mm,
+    right=25mm,
+    top=25mm,
+    bottom=25mm,
+    includeheadfoot,
+    headheight=15pt,
+    headsep=12pt,
+    footskip=25pt,
+}
+
+%----------------------------------------------------------------------------------------
+%	CODE BLOCK SYNTAX HIGHLIGHTING
+%----------------------------------------------------------------------------------------
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{pythonstyle}{
+    backgroundcolor=\color{backcolour},
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,
+    breaklines=true,
+    captionpos=b,
+    keepspaces=true,
+    numbers=left,
+    numbersep=5pt,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=4
+}
+\lstset{style=pythonstyle}
+
+% Simple environment for per-chapter introductory paragraph
+\newenvironment{chapterabstract}{%
+  \begin{quote}\itshape\small%
+}{%
+  \end{quote}\vspace{4pt}%
+}
+
+%----------------------------------------------------------------------------------------
+%	THESIS INFORMATION
+%----------------------------------------------------------------------------------------
+
+\thesistitle{Semantic Monitoring for Adaptive Compute Allocation in Edge Robotic Vision-Language Systems}
+\supervisor{Prof.~G.~C.~Nandi}
+\examiner{}
+\degree{Master of Technology}
+\firstauthor{Devarakonda Shanmukha Sai}
+\enrollmentnumber{MHC2024013}
+\addresses{Prayagraj -- 211015, Uttar Pradesh, India}
+\subject{Information Technology}
+\keywords{Vision-language models, Edge robotics, Adaptive compute allocation, Semantic drift, Temporal semantic memory, Selective inference, Object tracking, CLIP embeddings}
+\university{Indian Institute of Information Technology, Allahabad}
+\department{Department of Information Technology}
+\specialization{Human Computer Interaction}
+\faculty{Faculty Name}
+
+% Explicit name/roll commands for frontmatter
+\newcommand{\authorname}{Devarakonda Shanmukha Sai}
+\newcommand{\studentonename}{Devarakonda Shanmukha Sai}
+\newcommand{\studentoneroll}{MHC2024013}
+
+% Helper commands
+\newcommand{\authorprefix}{Mr.}
+\newcommand{\internalexaminername}{Internal Examiner Name}
+\newcommand{\externalexaminername}{External Examiner Name, Affiliation}
+\newcommand{\cosupervisorname}{Co-Supervisor (if any)}
+\newcommand{\hodname}{Prof. Manish Kumar}
+\newcommand{\deanname}{Prof. Pavan Chakraborty}
+
+\AtBeginDocument{
+\hypersetup{pdftitle=\ttitle}
+\hypersetup{pdfauthor=\authorname}
+\hypersetup{pdfkeywords=\keywordnames}
+}
+
+\begin{document}
+\begin{sloppypar}
+
+%----------------------------------------------------------------------------------------
+%	FRONT CONTENT
+%----------------------------------------------------------------------------------------
+
+\include{frontmatter}
+
+%----------------------------------------------------------------------------------------
+%	THESIS CONTENT - CHAPTERS
+%----------------------------------------------------------------------------------------
+
+\mainmatter
+\pagestyle{thesis}
+\begin{spacing}{1.5}
+
+\include{Chapters/1_introduction}
+\include{Chapters/2_literature}
+\include{Chapters/3_methods}
+\include{Chapters/4_implementation}
+\include{Chapters/5_experiments}
+\include{Chapters/6_conclusion}
+
+\end{spacing}
+
+%----------------------------------------------------------------------------------------
+%	BIBLIOGRAPHY
+%----------------------------------------------------------------------------------------
+
+\printbibliography[heading=bibintoc, title={References}]
+
+%----------------------------------------------------------------------------------------
+%	APPENDICES
+%----------------------------------------------------------------------------------------
+
+\appendix
+\include{Appendices/AppendixA}
+
+\end{sloppypar}
+\end{document}

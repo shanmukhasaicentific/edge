@@ -1,0 +1,216 @@
+\chapter{Literature Review}
+\label{ch:literature}
+
+\begin{chapterabstract}
+This chapter surveys the research streams on which the thesis builds:
+vision-language modelling, efficient and edge inference, temporal redundancy
+reduction in video, real-time object detection and multi-object tracking,
+semantic representations and concept drift, and adaptive conditional
+computation. Each section closes by identifying the gap that motivates a
+\emph{semantic-aware} scheduling layer, and the chapter ends with a
+comparative positioning of the proposed approach.
+\end{chapterabstract}
+
+\section{Vision-Language Models}
+\label{sec:lit-vlm}
+
+Vision-language models learn a joint representation of images and text that
+supports open-vocabulary recognition and reasoning. CLIP~\cite{Radford2021CLIP}
+established the contrastive pre-training paradigm, aligning an image encoder
+and a text encoder in a shared embedding space using large-scale web data; its
+normalised embeddings have since become a de-facto semantic descriptor for
+images. Generative VLMs extend this paradigm to free-form language output:
+BLIP-2~\cite{Li2023BLIP2} bridges a frozen vision encoder to a frozen large
+language model through a lightweight querying transformer, while
+LLaVA~\cite{Liu2023LLaVA} fine-tunes a projection between visual features and
+an instruction-tuned language model. These architectures inherit the
+transformer backbone~\cite{Vaswani2017Attention,Dosovitskiy2021ViT} and, with
+it, a per-inference cost that scales with input resolution and sequence
+length.
+
+For edge deployment, compact VLMs are essential. Moondream~\cite{Moondream2024}
+is a representative tiny VLM (on the order of a few billion parameters)
+designed for captioning and visual question answering on modest hardware. Even
+so, a single Moondream invocation remains orders of magnitude more expensive
+than the lightweight perception primitives discussed below, which is precisely
+why \emph{when} to invoke it matters.
+
+\section{Vision-Language Models in Robotics}
+\label{sec:lit-robotics}
+
+A growing body of work embeds VLMs into robotic control. SayCan~\cite{Ahn2022SayCan}
+grounds language-model plans in learned robotic affordances;
+RT-2~\cite{Brohan2023RT2} and OpenVLA~\cite{Kim2024OpenVLA} train
+vision-language-action models that map observations and instructions directly
+to control. Closer to the temporal setting of this thesis, agentic systems
+increasingly maintain a memory of the scene rather than reasoning from each
+observation in isolation: VideoAgent~\cite{Wang2024VideoAgent} couples a
+multimodal agent with an explicit memory to answer queries over long videos,
+and VideoARM~\cite{CognitiveNav} performs agentic reasoning over a
+hierarchical memory for long-form video understanding. These systems
+demonstrate the value of multimodal reasoning and persistent semantic memory
+for understanding continuous video, but they typically assume access to
+substantial compute and treat perception as a per-step query. None incorporates an explicit notion of \emph{semantic
+stability} that would let the agent skip reasoning when its understanding of
+the scene is unchanged --- the omission this thesis targets.
+
+\section{Efficient and Edge Inference}
+\label{sec:lit-efficient}
+
+Reducing the cost of neural inference is a mature field. Architectural
+efficiency is pursued through compact backbones such as
+MobileNets~\cite{Howard2017MobileNets}. Post-training compression includes
+pruning and quantization~\cite{Han2016DeepCompression} and low-precision
+matrix multiplication tailored to transformers~\cite{Dettmers2022LLMint8}.
+Knowledge distillation~\cite{Hinton2015Distillation} transfers the behaviour
+of a large model into a smaller one; TinyCLIP~\cite{Wu2023TinyCLIP} applies
+this idea to the embedding model itself, distilling a compact CLIP suitable
+for edge use --- directly relevant to the lightweight embedding the monitor
+relies on. The broader case for moving inference to the network edge, and the
+energy, latency, and bandwidth constraints that motivate it, is set out in
+surveys of edge intelligence~\cite{Zhou2019EdgeIntelligence}. These techniques
+reduce the cost of an \emph{individual} forward pass, and are complementary to
+this thesis: they make each VLM call cheaper, whereas the proposed scheduler
+reduces the \emph{number} of calls. The two axes multiply, and a complete edge
+system would exploit both.
+
+\section{Temporal Redundancy Reduction in Video}
+\label{sec:lit-temporal}
+
+Because video is temporally redundant, classical recognition pipelines first
+established that sparse temporal sampling suffices for many tasks: temporal
+segment networks~\cite{Wang2016TSN} recognise actions from a handful of
+sparsely sampled snippets, and attention-based video
+transformers~\cite{Bertasius2021TimeSformer} model temporal structure across
+frames. Building on this, several methods learn \emph{which} frames deserve
+expensive processing: AdaFrame~\cite{Wu2019AdaFrame} trains a policy to select
+informative frames for action recognition; SCSampler~\cite{Korbar2019SCSampler}
+samples salient clips using a cheap proxy; skip-convolutions~\cite{Habibian2021Skip}
+avoid recomputing convolutional features in regions that do not change between
+frames. These approaches operate at the level of raw appearance or low-level
+features and are usually trained end-to-end for a fixed downstream task. The
+present work differs in two respects: its trigger is a \emph{semantic} drift
+signal rather than appearance change, and it is \emph{training-free} at the
+policy level, relying on interpretable thresholds rather than a learned
+sampler, which suits the heterogeneous, label-scarce conditions of robotic
+deployment.
+
+\section{Object Detection and Multi-Object Tracking}
+\label{sec:lit-detection}
+
+Real-time object detection has been driven by single-stage detectors since
+YOLO~\cite{Redmon2016YOLO}; the YOLOv8 family~\cite{Jocher2023YOLOv8} offers
+nano-scale variants that run comfortably on edge accelerators while reporting
+object classes and bounding boxes trained on COCO~\cite{Lin2014COCO}.
+Multi-object tracking associates detections across frames to maintain stable
+identities: SORT~\cite{Bewley2016SORT} couples a Kalman filter with
+Hungarian assignment, and ByteTrack~\cite{Zhang2022ByteTrack} improves
+robustness by associating low-confidence boxes as well. In this thesis these
+components are not contributions in themselves; rather, their outputs ---
+object classes, counts, and identity continuity --- are repurposed as cheap,
+informative features for estimating semantic drift.
+
+\section{Semantic Representations and Concept Drift}
+\label{sec:lit-drift}
+
+Treating the evolving content of a video stream as a non-stationary signal
+connects this work to the literature on \emph{concept drift}, surveyed
+comprehensively by Gama et al.~\cite{Gama2014Drift}. There, drift detection
+governs when a learned model should be updated; here, an analogous drift
+signal governs when expensive reasoning should be re-invoked. The semantic
+descriptor we monitor is the CLIP embedding~\cite{Radford2021CLIP}, whose
+cosine geometry provides a natural, bounded distance between scene states.
+The novelty of the present formulation is to \emph{fuse} embedding drift with
+symbolic object-set and tracking-identity drift into one decision signal,
+rather than relying on a single modality.
+
+\section{Adaptive and Conditional Computation}
+\label{sec:lit-adaptive}
+
+Conditional computation allocates network capacity per input. Early-exit
+networks such as BranchyNet~\cite{Teerapittayanon2016BranchyNet} terminate
+inference once an intermediate classifier is confident; adaptive computation
+time~\cite{Graves2017Adaptive} learns how many steps to spend per input; and
+dynamic routing methods such as SkipNet~\cite{Wang2018SkipNet} skip layers
+conditionally. The survey of Han et al.~\cite{Han2021DynamicSurvey} organises
+these into sample-wise, spatial-wise, and temporal-wise dynamics. The
+proposed scheduler is a temporal-wise dynamic mechanism operating at the
+granularity of \emph{whole-model invocation across frames}, controlled by an
+external semantic monitor rather than by internal model confidence --- a design
+that keeps the expensive VLM a black box and is therefore agnostic to the
+specific model used.
+
+\section{Efficient Video Analytics Systems}
+\label{sec:lit-analytics}
+
+A systems-oriented line of research reduces the cost of querying neural
+networks over video streams. NoScope~\cite{Kang2017NoScope} accelerates
+queries by learning cheap, query-specific cascade models and difference
+detectors that filter out frames before invoking an expensive reference
+network. Reducto~\cite{Li2020Reducto} pushes filtering onto the camera itself,
+discarding frames whose low-level features change little so that only
+informative frames reach the analytics backend. These systems established the
+template the present work follows --- a cheap filter guarding an expensive
+model --- but their filtering criterion is a low-level feature difference tuned
+to a fixed query. This thesis replaces that criterion with a \emph{semantic}
+drift signal fused from embedding, object, and tracking cues, and guards a
+\emph{generative} vision-language model rather than a fixed-output classifier,
+so the system reduces semantic reasoning redundancy rather than frame
+redundancy for a single predetermined query.
+
+\section{Streaming and Adaptive Multimodal Inference}
+\label{sec:lit-streaming}
+
+Most directly related are recent systems that bring adaptivity to multimodal
+inference over continuous input. Streaming multimodal
+methods~\cite{StreamingVLM} reason over video as it arrives rather than over
+pre-segmented clips, raising the question of when continuous reasoning is
+actually necessary. AdaVFM~\cite{AdaVFM} makes vision foundation-model
+inference adaptive to input difficulty and resource budgets, routing inputs to
+cheaper or more expensive computation. QueST~\cite{QueST} frames perception in
+terms of representation-level semantic monitoring, providing terminology and
+motivation for treating semantic state --- rather than raw frames --- as the
+quantity to monitor. The present work shares these systems' goal of
+budget-aware multimodal inference but contributes a specific, interpretable,
+training-free mechanism: a fused semantic-drift signal mapped through two
+thresholds to a three-tier compute policy, with the reasoning model held as a
+replaceable black box. Where AdaVFM adapts \emph{within} a model and streaming
+methods adapt \emph{how} reasoning proceeds, this thesis decides \emph{whether}
+to reason at all, at the granularity of whole-model invocation across frames.
+
+\section{Comparative Positioning}
+\label{sec:lit-comparison}
+
+Table~\ref{tab:lit-comparison} contrasts the families above along the axes
+most relevant to edge robotic VLM deployment. The proposed approach is the
+only one whose decision criterion is an explicit, multi-signal \emph{semantic}
+drift estimate, that is training-free, and that treats the reasoning model as
+a replaceable black box.
+
+\begin{table}[htbp]
+\centering
+\caption[Comparison of efficiency approaches]{Positioning of the proposed
+semantic-aware scheduler against representative efficiency approaches.}
+\label{tab:lit-comparison}
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Approach} & \textbf{Redundancy} & \textbf{Decision} & \textbf{Training} & \textbf{Model-} \\
+ & \textbf{targeted} & \textbf{signal} & \textbf{-free} & \textbf{agnostic} \\
+\midrule
+Compression / quant.\          & Parameter & ---            & No  & No  \\
+Frame sampling                 & Frame     & Appearance     & No  & Partial \\
+Skip-convolutions              & Pixel     & Pixel change   & No  & No  \\
+Early exit                     & Sample    & Model conf.\   & No  & No  \\
+NoScope / Reducto              & Frame     & Feature diff.\ & No  & Partial \\
+Adaptive VFM (AdaVFM)          & Parameter & Input/budget   & No  & No  \\
+Embedding threshold            & Semantic  & Embedding only & Yes & Yes \\
+\textbf{Proposed}              & \textbf{Semantic reasoning} & \textbf{Fused drift} & \textbf{Yes} & \textbf{Yes} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+In summary, prior work makes each inference cheaper or skips low-level
+redundancy, but does not reason about \emph{semantic} redundancy at the level
+of whole-model invocation using a fused, interpretable signal. This gap
+defines the methodology developed next.

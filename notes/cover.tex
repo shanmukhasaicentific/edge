@@ -1,0 +1,121 @@
+%----------------------------------------------------------------------------------------
+%   HARDBOUND REXINE COVER PAGE
+%   Recreated from thesis title page
+%   Dark Brown-Black Rexine with Gold Embossed Text
+%   Print separately — do not include in main thesis PDF
+%----------------------------------------------------------------------------------------
+\documentclass[12pt, a4paper]{article}
+\usepackage{fontspec}
+\usepackage{geometry}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{rotating}
+\usepackage{polyglossia}
+\setmainlanguage{english}
+\setotherlanguages{hindi}
+\newfontfamily\devanagarifont[
+  Path=./,
+  Script=Devanagari
+]{NotoSerifDevanagari.ttf}
+\definecolor{goldcolor}{RGB}{212, 175, 55}
+\definecolor{rexinecolor}{RGB}{15, 10, 5}
+\geometry{
+    paper=a4paper,
+    left=20mm,
+    right=20mm,
+    top=25mm,
+    bottom=20mm,
+    noheadfoot,
+}
+\setmainfont{texgyretermes}[
+  Extension      = .otf,
+  UprightFont    = *-regular,
+  BoldFont       = *-bold,
+  ItalicFont     = *-italic,
+  BoldItalicFont = *-bolditalic,
+  Ligatures      = TeX,
+]
+\pagecolor{rexinecolor}
+% Graceful fallback if the IIITA logo is not present, so the cover compiles.
+\newcommand{\safeimage}[3][width=4cm]{%
+  \IfFileExists{#2}{\includegraphics[#1]{#2}}{%
+    \fbox{\parbox[c][2cm][c]{0.5\textwidth}{\centering\itshape\small
+      [#3] (place \texttt{\detokenize{#2}} here)}}%
+  }%
+}
+%----------------------------------------------------------------------------------------
+%   THESIS INFORMATION
+%----------------------------------------------------------------------------------------
+\newcommand{\ttitle}{Semantic Monitoring for Adaptive Compute Allocation in Edge Robotic Vision-Language Systems}
+\newcommand{\degreename}{Master of Technology}
+\newcommand{\subjectname}{Information Technology}
+\newcommand{\specializationname}{Human Computer Interaction}
+\newcommand{\authorname}{Devarakonda Shanmukha Sai}
+\newcommand{\rollnum}{MHC2024013}
+\newcommand{\supname}{Prof.~G.~C.~Nandi}
+\newcommand{\deptname}{Department of Information Technology}
+\newcommand{\univname}{Indian Institute of Information Technology, Allahabad}
+\newcommand{\monthyear}{June 2026}
+%----------------------------------------------------------------------------------------
+\begin{document}
+\thispagestyle{empty}
+\begin{center}
+\color{goldcolor}
+\begin{spacing}{1.2}
+{\large\bfseries\ttitle\par}
+\vspace{5mm}
+\textit{A thesis submitted in partial fulfillment of the requirements \\
+for the award of the degree of}
+\vspace{3mm}
+\textsc{\Large \degreename}
+\vspace{2mm}
+\textit{in}
+\textsc{\normalsize \subjectname}
+\vspace{2mm}
+\textit{with specialization in}
+\vspace{1mm}
+\textsc{\normalsize \specializationname}
+\vspace{4mm}
+\safeimage[width=3.5cm]{Figures/IIITA_Logo.png}{IIITA Logo}
+\vspace{4mm}
+\textit{Submitted by}\\[2mm]
+\textsc{\large \authorname}\\
+\textit{(\rollnum)}
+\vspace{4mm}
+\textit{Under the Supervision of}\\[2mm]
+\textsc{\large \supname}
+\vspace{4mm}
+\textit{to the}\\[2mm]
+\textsc{\normalsize \deptname}
+\vspace{5mm}
+{\large\textbf{\texthindi{भारतीय सूचना प्रौद्योगिकी संस्थान, इलाहाबाद}}}\\[2mm]
+\textsc{\normalsize \univname}
+\vspace{3mm}
+\monthyear
+\end{spacing}
+\end{center}
+%----------------------------------------------------------------------------------------
+%   SPINE
+%----------------------------------------------------------------------------------------
+\clearpage
+\thispagestyle{empty}
+\pagecolor{rexinecolor}
+\vspace*{\fill}
+\begin{center}
+\rotatebox{90}{%
+\begin{minipage}{0.95\textheight}
+\color{goldcolor}
+\centering
+{\normalsize\bfseries
+\MakeUppercase{\ttitle}
+\hfill
+\MakeUppercase{\authorname}
+\hfill
+M.TECH\ \textbullet\ IIITA\ \textbullet\ 2026
+}
+\end{minipage}
+}
+\end{center}
+\vspace*{\fill}
+\end{document}

@@ -1,0 +1,115 @@
+\chapter{Conclusion and Future Scope}
+\label{ch:conclusion}
+
+\begin{chapterabstract}
+This chapter draws the thesis together. It revisits the research question and
+the evidence assembled in support of the proposed scheduler, examines the
+architectural trade-offs and limitations honestly, and sketches the most
+promising directions for extending semantic-aware compute allocation in edge
+robotic vision-language systems.
+\end{chapterabstract}
+
+\section{Thesis Synthesis and Final Review}
+\label{sec:concl-synthesis}
+
+This thesis set out to answer how semantic state transitions can dynamically
+control multimodal compute allocation in edge robotic vision systems while
+preserving semantic fidelity. The answer it develops is a
+\emph{monitor-then-allocate} architecture in which an always-on, lightweight
+monitor maintains a composite semantic state from cheap detection, tracking,
+and embedding signals; estimates a bounded, interpretable drift signal that
+fuses embedding distance, object-set novelty, and tracking-identity churn
+(Equation~\ref{eq:drift}); and drives a three-tier policy
+(Equation~\ref{eq:policy}) that spends expensive vision-language reasoning
+only when the scene has genuinely changed.
+
+The central conceptual contribution is to name and target \emph{semantic
+reasoning redundancy} --- the repeated re-derivation of a scene's meaning while
+that meaning is unchanged --- as an efficiency axis orthogonal to the pixel-,
+frame-, and parameter-level redundancies that prior work addresses. The
+practical contributions are the fused-drift formulation, the temporal
+semantic memory that immunises it against sensor noise, the interpretable
+tiered policy, the modular edge-oriented reference implementation, the
+Semantic Compute Efficiency metric that makes the fidelity--compute trade-off
+measurable on a single scale, and the Semantic Observatory together with the
+observe--hypothesise--modify--evaluate methodology by which scheduling policies
+are discovered from evidence rather than guessed. The evaluation of
+Chapter~\ref{ch:experiments} demonstrates the expected behaviour: the
+scheduler retains the bulk of an every-frame oracle's fidelity while invoking
+the VLM on a small fraction of frames, achieving the highest SCE among the
+policies compared.
+
+\section{Architectural Trade-offs and Computational Costs}
+\label{sec:concl-tradeoffs}
+
+The approach is not without cost, and three trade-offs deserve explicit
+acknowledgement.
+
+\paragraph{Decision overhead.} The monitor runs on every frame, so its cost is
+paid unconditionally. The design is only worthwhile because that cost is far
+below a VLM invocation; on hardware where detection, tracking, and embedding
+are not comfortably real-time, the margin shrinks. The frame filter and
+reduced-resolution inference of Section~\ref{sec:arch-hardware} exist
+precisely to protect this margin.
+
+\paragraph{Memory footprint, not memory savings.} Because the VLM remains
+resident in accelerator memory to avoid reload latency, peak memory is
+unchanged relative to an every-frame policy. The savings are in time and
+energy. A deployment that is memory- rather than compute-bound would need a
+different treatment, such as offloading the VLM between bursts.
+
+\paragraph{Threshold sensitivity and silent drift.} The policy's behaviour
+depends on $\tau_{\text{low}}$, $\tau_{\text{high}}$, and the weights
+$(\alpha,\beta,\gamma)$. Set too conservatively, the system reasons too
+often; too aggressively, it risks missing slow, sub-threshold
+\emph{silent drift}. The accumulating monitor of
+Section~\ref{sec:arch-drift} mitigates but does not eliminate this risk, and
+the ablation of Section~\ref{sec:exp-ablation} shows the trade-off is real.
+
+\section{Directions for Future Research}
+\label{sec:concl-future}
+
+Several extensions follow naturally from this work.
+
+\begin{itemize}
+  \item \textbf{Learned, adaptive thresholds.} The fixed thresholds could be
+  replaced by a lightweight controller that adapts $\tau_{\text{low}}$ and
+  $\tau_{\text{high}}$ online to the observed drift distribution or to a
+  downstream task-error signal, removing manual tuning.
+  \item \textbf{Task-conditioned drift.} The drift weights are currently
+  global. Conditioning them on the robot's active task --- so that, for
+  instance, the appearance of task-relevant object classes dominates the
+  signal --- would make redundancy reduction goal-aware.
+  \item \textbf{Predictive scheduling.} The monitor reacts to drift after it
+  occurs. Forecasting imminent semantic change from motion and tracking
+  trajectories could let the system pre-warm or pre-empt reasoning, smoothing
+  latency spikes at transitions.
+  \item \textbf{Closing the loop with control.} Integrating the scheduler into
+  a full vision-language-action stack~\cite{Kim2024OpenVLA} and measuring its
+  effect on end-task success --- not just perceptual retention --- would validate
+  the approach where it ultimately matters.
+  \item \textbf{Broader hardware and model coverage.} Because the scheduler
+  treats the VLM as a black box, evaluating it across additional compact VLMs
+  and embedded accelerators would establish the generality of the SCE gains.
+  \item \textbf{Cross-domain real-world validation.} The invocation patterns
+  anticipated in Section~\ref{sec:exp-crossdomain} --- across surveillance,
+  traffic, number-plate recognition, crowd, sports (cricket, football), and
+  live-streaming video --- should be measured at scale to confirm that a single
+  default configuration generalises, or to derive per-domain drift-weight and
+  threshold profiles where it does not.
+  \item \textbf{Egocentric robotic deployment.} Robots perceive through a
+  moving camera, so egomotion robustness is essential rather than optional.
+  The camera-motion compensation of Section~\ref{sec:meth-egomotion}, which
+  discounts embedding drift by the egomotion fraction $c_t$ and relies on the
+  motion-robust object and tracking signals, is the key enabler here;
+  validating and refining it on head-mounted and mobile-robot streams --- and
+  integrating richer egomotion estimation (e.g.\ visual odometry) --- is a
+  priority for real-world use.
+\end{itemize}
+
+In closing, this thesis argues that the path to deploying vision-language
+reasoning on resource-constrained robots runs not only through smaller and
+faster models, but through systems that understand \emph{when} reasoning is
+worth its cost. Treating semantic stability as a first-class, measurable
+signal --- and allocating compute in proportion to semantic novelty --- offers a
+principled and model-agnostic route to that goal.

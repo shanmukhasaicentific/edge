@@ -42,7 +42,18 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 # Add parent directory to path to import thesis code
-sys.path.insert(0, str(Path(__file__).parent.parent))
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+# Import environment configuration
+from src.config.env_config import (
+    get_test_video_dir,
+    get_output_dir,
+    get_checkpoint_dir,
+    IS_KAGGLE,
+    ENVIRONMENT,
+    print_environment_info
+)
 
 # Try to import wandb (optional)
 try:
@@ -209,14 +220,14 @@ def load_config(config_name: str) -> dict:
     }
 
 def get_test_video() -> str:
-    """Find test video in experiments directory."""
-    experiments_dir = Path(__file__).parent.parent / "experiments" / "test"
+    """Find test video (uses env config for compatibility)."""
+    video_dir = get_test_video_dir()
     for ext in ['*.mp4', '*.avi', '*.mov']:
-        videos = list(experiments_dir.glob(ext))
+        videos = list(video_dir.glob(ext))
         if videos:
             return str(videos[0])
 
-    raise FileNotFoundError("No test video found in experiments/test/")
+    raise FileNotFoundError(f"No test video found in {video_dir}")
 
 # ---------------------------------------------------------------------------
 # Pipeline Execution
@@ -432,6 +443,9 @@ def main():
         print(f"\nTotal: {len(checkpoints)} checkpoints")
         return 0
 
+    # Print environment info (helpful for debugging on Kaggle)
+    print_environment_info()
+
     # Initialize wandb
     wandb_tracker = WandBTracker(
         project=args.wandb_project,
@@ -478,9 +492,11 @@ def main():
     if args.gamma is not None:
         config['gamma'] = args.gamma
 
-    # Create output directory
+    # Create output directory (use env config by default)
     if args.output_dir:
         output_dir = Path(args.output_dir)
+    elif IS_KAGGLE:
+        output_dir = get_output_dir()
     else:
         output_dir = Path(__file__).parent / f"results_{args.phase}_{args.config}"
     output_dir.mkdir(parents=True, exist_ok=True)

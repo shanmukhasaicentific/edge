@@ -1,0 +1,247 @@
+\chapter{Software Architecture and Engineering Design}
+\label{ch:architecture}
+
+\begin{chapterabstract}
+This chapter translates the methodology of Chapter~\ref{ch:methods} into a
+concrete software system. It presents the layered architecture, a
+component-by-component breakdown of the monitor and scheduler, the per-frame
+control flow, the policy abstraction that makes baselines and the proposed
+scheduler interchangeable, the hyperparameter configuration, and the
+hardware-execution strategy used for evaluation.
+\end{chapterabstract}
+
+\section{System Architecture Overview}
+\label{sec:arch-overview}
+
+The implementation is organised as a modular Python package in which each
+stage of Figure~\ref{fig:arch} is a self-contained class with a narrow
+interface. A driver iterates over frames, invokes the always-on monitor, and
+delegates the compute decision to a pluggable \emph{policy} object. This
+separation lets every baseline and the proposed scheduler share identical
+perception and evaluation code, so that measured differences are attributable
+solely to the allocation decision. The package layout is summarised in
+Table~\ref{tab:modules}.
+
+\begin{table}[htbp]
+\centering
+\caption[Source module layout]{Source module layout and responsibilities.}
+\label{tab:modules}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Module} & \textbf{Responsibility} \\
+\midrule
+\texttt{detection/}      & Frame filtering and YOLOv8-n object detection \\
+\texttt{tracking/}       & ByteTrack identity association wrapper \\
+\texttt{embeddings/}     & CLIP ViT-B/32 embedding extraction \\
+\texttt{semantic\_memory/} & Temporal memory and drift estimation \\
+\texttt{scheduler/}      & Semantic cache and tiered VLM scheduler \\
+\texttt{vlm/}            & Moondream wrapper and VLM factory \\
+\texttt{policies/}       & The five interchangeable allocation policies \\
+\texttt{evaluation/}     & Metric computation and SCE evaluator \\
+\texttt{observatory/}    & Semantic-evolution analytics, visualisation, dashboard \\
+\texttt{robotics/}       & Downstream perception-layer adapter \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Component-Level Implementation Breakdown}
+\label{sec:arch-components}
+
+\subsection{Frame Filtering and Detection}
+\label{sec:arch-detection}
+
+The frame filter is a CPU-only first guard that discards frames offering no
+opportunity for change --- for example near-duplicate frames under a cheap
+pixel-difference test --- before any accelerator work is scheduled. Surviving
+frames are passed to the nano-scale YOLOv8 detector~\cite{Jocher2023YOLOv8},
+which returns class labels and bounding boxes. Only the class--count summary
+$O_t$ and the boxes (for the tracker) are retained; pixels are not held beyond
+the current iteration, keeping the memory footprint bounded.
+
+\subsection{Tracking and Embedding}
+\label{sec:arch-track-embed}
+
+The tracking wrapper feeds detector boxes to ByteTrack~\cite{Zhang2022ByteTrack}
+and exposes the set of active identities $\mathcal{I}_t$. In parallel, the
+embedding extractor computes the $\ell_2$-normalised CLIP
+embedding~\cite{Radford2021CLIP} $E_t$. Both run within the Tier-1 budget and
+together with detection constitute the entire cost of \emph{deciding} whether
+to reason.
+
+\subsection{Temporal Memory and Drift Estimation}
+\label{sec:arch-drift}
+
+The \texttt{semantic\_memory} module implements
+Equations~(\ref{eq:memory})--(\ref{eq:dtrack}). It owns the decayed memory
+$M_t$, the reference object set $O_{\text{ref}}$, and the reference identity
+set $\mathcal{I}_{\text{ref}}$, exposing a single \texttt{drift(frame\_state)}
+call that returns the scalar $D_t$ and its three components for logging.
+A monitoring helper accumulates drift over time so that slow, silent semantic
+drift --- change too gradual to cross a threshold on any single frame --- can be
+detected and surfaced. Listing~\ref{lst:drift} shows the core computation.
+
+\begin{lstlisting}[language=Python, caption={Composite drift computation (excerpt).}, label={lst:drift}]
+def drift(self, E_t, O_t, ids_t):
+    # embedding drift against decayed memory (unit-norm vectors)
+    d_embed = 0.5 * (1.0 - float(E_t @ self.M))
+    # object-set novelty (Jaccard over class-count pairs)
+    inter = self._multiset_intersect(O_t, self.O_ref)
+    union = self._multiset_union(O_t, self.O_ref)
+    d_obj = 1.0 - (inter / union) if union else 0.0
+    # tracking-identity churn (symmetric difference)
+    sym = len(ids_t ^ self.ids_ref)
+    uni = len(ids_t | self.ids_ref)
+    d_trk = (sym / uni) if uni else 0.0
+    D_t = self.a * d_embed + self.b * d_obj + self.g * d_trk
+    self._update_memory(E_t)            # M <- normalize(lambda*M + (1-lambda)*E_t)
+    return D_t, (d_embed, d_obj, d_trk)
+\end{lstlisting}
+
+\subsection{Scheduler, Cache, and VLM Wrapper}
+\label{sec:arch-scheduler}
+
+The \texttt{scheduler} module realises the tier mapping of
+Equation~(\ref{eq:policy}). On a Tier-1 frame it returns the cached output; on
+Tier-2/3 it calls a VLM wrapper, which abstracts the underlying model behind a
+uniform \texttt{caption(frame, mode)} interface so that the backend can be
+swapped through a factory (\texttt{vlm\_factory.py}) without touching the
+scheduler. The cache stores the latest output and the state that produced it,
+and re-anchors the references on Tier-3 invocations.
+
+\subsection{Vision-Language Model Backends}
+\label{sec:arch-vlm-backends}
+
+Because the scheduler treats the VLM as a black box, several backends are
+supported and can be selected at run time; this also enables a
+\emph{hierarchical} configuration in which the cheaper Tier-2 query and the
+heavier Tier-3 query are served by different-capacity models. Two families are
+implemented --- Moondream2~\cite{Moondream2024} and the
+Qwen2.5-VL~\cite{Qwen25VL} series --- and any compact captioning/VQA model
+exposing the same interface can be added. Table~\ref{tab:vlm-backends} lists
+the supported and compatible backends together with their fit on a single
+Kaggle NVIDIA~T4 (16\,GB).
+
+\begin{table}[htbp]
+\centering
+\caption[Supported VLM backends]{Vision-language backends and their fit on a
+single Kaggle T4 (16\,GB). Moondream2 is the lightweight default; Qwen2.5-VL is
+the stronger Tier-3 reasoner. The lower block lists additional black-box-%
+compatible models.}
+\label{tab:vlm-backends}
+\small
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Backend} & \textbf{Params} & \textbf{T4 (16\,GB) fit} & \textbf{Typical tier role} \\
+\midrule
+Moondream2                & $\sim$1.9\,B & $\sim$4\,GB (trivial)        & Tier 2 (lightweight, default) \\
+Qwen2.5-VL-3B             & $\sim$3\,B   & $\sim$7\,GB (fp16)          & Tier 2/3 (mid) \\
+Qwen2.5-VL-7B             & $\sim$7\,B   & $\sim$14--16\,GB (fp16)     & Tier 3 (full) \\
+Qwen2.5-VL-7B (4-bit)     & $\sim$7\,B   & $\sim$9\,GB (NF4)           & Tier 3 (full, recommended) \\
+\midrule
+\multicolumn{4}{@{}l}{\itshape Additional compatible backends:} \\
+SmolVLM-2.2B              & $\sim$2.2\,B & $\sim$5\,GB                 & Tier 2 \\
+InternVL2-2B / 4B         & 2--4\,B      & $\sim$6--9\,GB              & Tier 2/3 \\
+LLaVA-1.5-7B (4-bit)      & $\sim$7\,B   & $\sim$8\,GB                 & Tier 3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+In the reported experiments Moondream2 serves the lightweight tier for its low
+latency and memory footprint, while Qwen2.5-VL provides stronger full
+reasoning; on a two-GPU Kaggle session the heavier model can be pinned to a
+second T4 so that loading it never disturbs the always-on Tier-1 monitor.
+Crucially, the scheduling behaviour --- call rate, cache hit rate, and SCE ---
+is governed by the drift policy and is therefore independent of which backend
+is chosen; swapping the model changes the \emph{quality} of each invoked
+caption, not \emph{when} the VLM is invoked.
+
+\section{Control Flow and the Policy Abstraction}
+\label{sec:arch-controlflow}
+
+Each baseline in Chapter~\ref{ch:experiments} is expressed as a policy object
+implementing one method, \texttt{decide(drift, frame\_idx) -> tier}. This
+makes the five strategies --- every-frame, uniform sampling, motion gating,
+embedding-threshold, and the proposed fused-drift scheduler --- drop-in
+replacements that share all other code. The driver loop is:
+
+\begin{enumerate}
+  \item read and (optionally) filter the next frame;
+  \item run detection, tracking, and embedding to obtain $(O_t,\mathcal{I}_t,E_t)$;
+  \item compute $D_t$ via the drift estimator;
+  \item ask the active policy for a tier;
+  \item execute the tier (reuse cache, light VLM, or full VLM);
+  \item record per-frame metrics and update memory.
+\end{enumerate}
+
+\section{Hyperparameter Configuration}
+\label{sec:arch-hyperparams}
+
+All tunable quantities are declared in YAML so that experiments are
+reproducible and the only difference between runs is configuration.
+Table~\ref{tab:hyperparams} lists the defaults used unless a study states
+otherwise.
+
+\begin{table}[htbp]
+\centering
+\caption[Default hyperparameters]{Default hyperparameter configuration.}
+\label{tab:hyperparams}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Default} \\
+\midrule
+$\alpha,\beta,\gamma$ & Drift component weights & $0.5,\,0.3,\,0.2$ \\
+$\tau_{\text{low}}$   & Tier-1/2 threshold      & $0.15$ \\
+$\tau_{\text{high}}$  & Tier-2/3 threshold      & $0.40$ \\
+$\lambda$             & Memory decay factor     & $0.90$ \\
+$d$                   & CLIP embedding dim.\    & $512$ (ViT-B/32) \\
+---                   & Detector                & YOLOv8-n (COCO) \\
+---                   & VLM (Tier 2 / Tier 3)   & Moondream2 / Qwen2.5-VL \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{The Semantic Observatory Subsystem}
+\label{sec:arch-observatory}
+
+The Semantic Observatory of Section~\ref{sec:meth-observatory} is realised as
+the \texttt{observatory} package and the \texttt{run\_observatory.py} driver.
+It operates \emph{post hoc} on the \texttt{frame\_log.csv} emitted by any
+pipeline run, so it imposes no cost on the real-time path and can analyse the
+proposed scheduler or any baseline identically. Its components are:
+
+\begin{itemize}
+  \item \texttt{analytics.py} --- the \texttt{SemanticAnalyticsEngine}, which
+  computes the ten per-frame signals of
+  Table~\ref{tab:observatory-signals} and detects stability windows,
+  transition zones, object-persistence records, and semantic events.
+  \item \texttt{visualizer.py} --- renders time-aligned figures (drift,
+  velocity, acceleration, volatility, tier, and VLM-invocation timelines on a
+  shared axis).
+  \item \texttt{output\_writer.py} --- serialises the analysis to CSV/JSON
+  artefacts for the experiment record.
+  \item \texttt{dashboard.py} --- assembles an interactive HTML dashboard for
+  qualitative inspection of a run.
+  \item \texttt{live\_collector.py} --- an optional hook to accumulate the same
+  signals online during a run.
+\end{itemize}
+
+Because the Observatory only reads logs and never writes to the scheduler, the
+experimental protocol of Equation~(\ref{eq:protocol}) is kept honest: analysis
+and decision-making are strictly separated, and every reported improvement is
+traceable to a single, recorded change.
+
+\section{Hardware Optimization and Execution Strategy}
+\label{sec:arch-hardware}
+
+The system is built on PyTorch~\cite{Paszke2019PyTorch} and
+OpenCV~\cite{Bradski2000OpenCV}. Experiments run on a Kaggle NVIDIA~T4 GPU for
+GPU-bound stages (CLIP and the VLM) and a commodity laptop CPU for the
+filtering and tracking stages, mirroring the heterogeneous compute of a real
+edge robot. The engineering levers that keep the Tier-1 monitor within
+real-time budget are: (i) running detection and embedding at reduced input
+resolution; (ii) keeping the VLM resident in accelerator memory to avoid
+reload latency on Tier-2/3 transitions; and (iii) restricting all per-frame
+state to compact summaries ($E_t$, $O_t$, $\mathcal{I}_t$) rather than raw
+frames, which bounds peak memory irrespective of stream length.

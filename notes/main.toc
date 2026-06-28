@@ -1,0 +1,78 @@
+\contentsline {chapter}{Abstract}{iv}{Item.3}%
+\contentsline {chapter}{Acknowledgements}{vi}{chapter*.5}%
+\contentsline {chapter}{Contents}{vii}{chapter*.6}%
+\contentsline {chapter}{List of Figures}{x}{chapter*.7}%
+\contentsline {chapter}{List of Tables}{xi}{chapter*.8}%
+\contentsline {chapter}{List of Abbreviations}{xii}{chapter*.9}%
+\contentsline {chapter}{List of Symbols}{xiii}{chapter*.10}%
+\xpg@aux {}{english}
+\contentsline {chapter}{\numberline {1}Introduction}{1}{chapter.11}%
+\contentsline {section}{\numberline {1.1}Background and Contemporary Context}{1}{section.12}%
+\contentsline {section}{\numberline {1.2}The Core Problem: Semantic Reasoning Redundancy}{2}{section.13}%
+\contentsline {section}{\numberline {1.3}Research Motivation and the Need for Semantic-Aware Scheduling}{3}{section.14}%
+\contentsline {paragraph}{Observation 1: Semantic change is bursty, not uniform.}{3}{section*.15}%
+\contentsline {paragraph}{Observation 2: Cheap signals can predict the value of expensive reasoning.}{3}{section*.16}%
+\contentsline {paragraph}{Observation 3: Most useful outputs are reusable.}{4}{section*.17}%
+\contentsline {section}{\numberline {1.4}Statement of Core Research Objectives}{4}{section.18}%
+\contentsline {section}{\numberline {1.5}Summary of Scientific Contributions}{5}{section.23}%
+\contentsline {section}{\numberline {1.6}Thesis Document Organization}{6}{section.24}%
+\contentsline {chapter}{\numberline {2}Literature Review}{7}{chapter.25}%
+\contentsline {section}{\numberline {2.1}Vision-Language Models}{7}{section.26}%
+\contentsline {section}{\numberline {2.2}Vision-Language Models in Robotics}{8}{section.27}%
+\contentsline {section}{\numberline {2.3}Efficient and Edge Inference}{8}{section.28}%
+\contentsline {section}{\numberline {2.4}Temporal Redundancy Reduction in Video}{9}{section.29}%
+\contentsline {section}{\numberline {2.5}Object Detection and Multi-Object Tracking}{9}{section.30}%
+\contentsline {section}{\numberline {2.6}Semantic Representations and Concept Drift}{10}{section.31}%
+\contentsline {section}{\numberline {2.7}Adaptive and Conditional Computation}{10}{section.32}%
+\contentsline {section}{\numberline {2.8}Efficient Video Analytics Systems}{10}{section.33}%
+\contentsline {section}{\numberline {2.9}Streaming and Adaptive Multimodal Inference}{11}{section.34}%
+\contentsline {section}{\numberline {2.10}Comparative Positioning}{11}{section.35}%
+\contentsline {chapter}{\numberline {3}Proposed Methodology}{13}{chapter.37}%
+\contentsline {section}{\numberline {3.1}Overview and Design Principles}{13}{section.38}%
+\contentsline {section}{\numberline {3.2}Semantic State Representation}{15}{section.40}%
+\contentsline {section}{\numberline {3.3}Temporal Semantic Memory}{15}{section.42}%
+\contentsline {section}{\numberline {3.4}Semantic Drift Estimation}{16}{section.44}%
+\contentsline {paragraph}{Embedding drift.}{16}{section*.46}%
+\contentsline {paragraph}{Object novelty.}{16}{section*.48}%
+\contentsline {paragraph}{Tracking-identity change.}{17}{section*.50}%
+\contentsline {section}{\numberline {3.5}Egocentric Operation and Camera-Motion Compensation}{17}{section.52}%
+\contentsline {section}{\numberline {3.6}Adaptive Compute-Allocation Policy}{18}{section.54}%
+\contentsline {section}{\numberline {3.7}Selective Invocation and Semantic Caching}{19}{section.57}%
+\contentsline {section}{\numberline {3.8}Semantic Compute Efficiency}{19}{section.58}%
+\contentsline {section}{\numberline {3.9}The Semantic Observatory and Policy-Discovery Methodology}{20}{section.60}%
+\contentsline {chapter}{\numberline {4}Software Architecture and Engineering Design}{22}{chapter.63}%
+\contentsline {section}{\numberline {4.1}System Architecture Overview}{22}{section.64}%
+\contentsline {section}{\numberline {4.2}Component-Level Implementation Breakdown}{22}{section.66}%
+\contentsline {subsection}{\numberline {4.2.1}Frame Filtering and Detection}{22}{subsection.67}%
+\contentsline {subsection}{\numberline {4.2.2}Tracking and Embedding}{23}{subsection.68}%
+\contentsline {subsection}{\numberline {4.2.3}Temporal Memory and Drift Estimation}{23}{subsection.69}%
+\contentsline {subsection}{\numberline {4.2.4}Scheduler, Cache, and VLM Wrapper}{24}{subsection.85}%
+\contentsline {subsection}{\numberline {4.2.5}Vision-Language Model Backends}{24}{subsection.86}%
+\contentsline {section}{\numberline {4.3}Control Flow and the Policy Abstraction}{25}{section.88}%
+\contentsline {section}{\numberline {4.4}Hyperparameter Configuration}{26}{section.95}%
+\contentsline {section}{\numberline {4.5}The Semantic Observatory Subsystem}{26}{section.97}%
+\contentsline {section}{\numberline {4.6}Hardware Optimization and Execution Strategy}{27}{section.98}%
+\contentsline {chapter}{\numberline {5}Experimental Setup and Empirical Evaluation}{28}{chapter.99}%
+\contentsline {section}{\numberline {5.1}Video Environment and Parameters}{28}{section.100}%
+\contentsline {section}{\numberline {5.2}Formal Evaluation Metrics}{29}{section.101}%
+\contentsline {section}{\numberline {5.3}Baseline Policies}{29}{section.102}%
+\contentsline {section}{\numberline {5.4}Quantitative Performance Analysis}{30}{section.108}%
+\contentsline {subsection}{\numberline {5.4.1}Comparison Against Baselines}{31}{subsection.112}%
+\contentsline {section}{\numberline {5.5}Cross-Domain Applicability and Invocation Patterns}{32}{section.114}%
+\contentsline {section}{\numberline {5.6}Planned Ablation Studies}{34}{section.116}%
+\contentsline {section}{\numberline {5.7}Discussion}{35}{section.118}%
+\contentsline {chapter}{\numberline {6}Conclusion and Future Scope}{36}{chapter.119}%
+\contentsline {section}{\numberline {6.1}Thesis Synthesis and Final Review}{36}{section.120}%
+\contentsline {section}{\numberline {6.2}Architectural Trade-offs and Computational Costs}{37}{section.121}%
+\contentsline {paragraph}{Decision overhead.}{37}{section*.122}%
+\contentsline {paragraph}{Memory footprint, not memory savings.}{37}{section*.123}%
+\contentsline {paragraph}{Threshold sensitivity and silent drift.}{37}{section*.124}%
+\contentsline {section}{\numberline {6.3}Directions for Future Research}{38}{section.125}%
+\contentsline {chapter}{References}{40}{chapter*.126}%
+\contentsline {chapter}{\numberline {A}Operational Guide and Reproducibility Manual}{44}{appendix.127}%
+\contentsline {section}{\numberline {A.1}Hardware and System Prerequisites}{44}{section.128}%
+\contentsline {section}{\numberline {A.2}Environment Assembly and Dependency Registry}{44}{section.129}%
+\contentsline {section}{\numberline {A.3}Command-Line Execution}{45}{section.138}%
+\contentsline {subsection}{\numberline {A.3.1}Running all baselines and the proposed scheduler}{45}{subsection.139}%
+\contentsline {subsection}{\numberline {A.3.2}Individual runs and the threshold sweep}{45}{subsection.145}%
+\contentsline {section}{\numberline {A.4}Output Structure}{46}{section.168}%

@@ -54,14 +54,25 @@ class ByteTrackWrapper:
         match_thresh: float = 0.8,
         frame_rate: int = 30,
     ):
-        from boxmot import ByteTrack
+        """Initialize ByteTrack wrapper (compatible with boxmot v10-v21+)."""
+        try:
+            # Try modern boxmot API (v10-v18)
+            from boxmot import ByteTrack
+            self.tracker = ByteTrack(
+                track_thresh=track_thresh,
+                track_buffer=track_buffer,
+                match_thresh=match_thresh,
+                frame_rate=frame_rate,
+            )
+        except ImportError:
+            # Fallback for future boxmot versions
+            # If you get here, boxmot.ByteTrack is not available
+            # See: https://github.com/mikel-brostrom/yolo_tracking
+            print("ERROR: boxmot.ByteTrack not found.")
+            print("Recommended: pip install boxmot==10.11.62")
+            print("Or update this wrapper for your boxmot version.")
+            raise
 
-        self.tracker = ByteTrack(
-            track_thresh=track_thresh,
-            track_buffer=track_buffer,
-            match_thresh=match_thresh,
-            frame_rate=frame_rate,
-        )
         self._prev_ids: Set[int] = set()
 
     def update(self, detections: np.ndarray, frame: np.ndarray, frame_id: int = 0) -> TrackingResult:

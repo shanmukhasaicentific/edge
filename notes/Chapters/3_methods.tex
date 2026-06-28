@@ -1,0 +1,371 @@
+\chapter{Proposed Methodology}
+\label{ch:methods}
+
+\begin{chapterabstract}
+This chapter develops the formal machinery of the thesis. It defines a
+composite semantic-state representation built from cheap per-frame signals, a
+temporal semantic memory that stabilises that representation against noise, a
+bounded semantic-drift estimator that fuses embedding, object, and tracking
+cues, a three-tier adaptive compute-allocation policy driven by interpretable
+thresholds, and the Semantic Compute Efficiency metric used to evaluate the
+resulting trade-off.
+\end{chapterabstract}
+
+\section{Overview and Design Principles}
+\label{sec:meth-overview}
+
+The proposed system follows a \emph{monitor-then-allocate} discipline. Every
+frame passes through a lightweight semantic monitor that updates an internal
+estimate of the scene's semantic state and emits a scalar drift score. A
+scheduling policy maps this score to a discrete compute tier, and only the
+upper tiers invoke the expensive vision-language model. Figure~\ref{fig:arch}
+shows the end-to-end flow.
+
+Three principles guide the design. First, \emph{the cost of deciding must be
+much smaller than the cost of reasoning}; hence the monitor reuses
+perception primitives that are cheap enough to run on every frame. Second,
+\emph{decisions must be interpretable}; the policy is governed by two
+thresholds with clear semantics rather than an opaque learned controller.
+Third, \emph{the reasoning model is a black box}; the scheduler never inspects
+VLM internals, so any captioning or visual-question-answering model can be
+substituted without changing the policy.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  node distance = 6.5mm and 9mm,
+  font = \footnotesize,
+  box/.style = {rectangle, rounded corners=2pt, draw, thick,
+                align=center, minimum height=7mm, inner sep=3pt,
+                text width=30mm, fill=blue!5},
+  tier1/.style = {box, fill=green!8},
+  vlm/.style  = {box, fill=red!8, text width=34mm},
+  arrow/.style = {-{Stealth}, thick},
+]
+\node[box] (cam) {Robot Camera /\\Video Stream};
+\node[tier1, below=of cam] (filter) {Lightweight Frame\\Filtering (CPU)};
+\node[tier1, below=of filter] (yolo) {YOLOv8-n Object\\Detection};
+\node[tier1, below=of yolo] (track) {ByteTrack\\Object Tracking};
+\node[tier1, below=of track] (clip) {CLIP Embedding\\$E_t$};
+
+\node[box, right=22mm of track] (mem) {Temporal Semantic\\Memory $M_t$};
+\node[box, above=of mem] (drift) {Semantic Drift\\Estimator $D_t$};
+\node[box, above=of drift] (policy) {Adaptive Allocation\\Policy};
+\node[vlm, below=of mem] (vlm) {Selective VLM\\Invocation (Tier 2/3)};
+\node[box, below=of vlm] (cache) {Semantic Cache\\Update};
+\node[box, below=of cache] (robot) {Robotic Perception\\Layer};
+
+\draw[arrow] (cam) -- (filter);
+\draw[arrow] (filter) -- (yolo);
+\draw[arrow] (yolo) -- (track);
+\draw[arrow] (track) -- (clip);
+\draw[arrow] (clip.east) -- ++(0.6,0) |- (mem.west);
+\draw[arrow] (yolo.east) to[out=0,in=180] (drift.west);
+\draw[arrow] (mem) -- (drift);
+\draw[arrow] (drift) -- (policy);
+\draw[arrow] (policy.east) -- ++(0.5,0) |- (vlm.east);
+\draw[arrow] (vlm) -- (cache);
+\draw[arrow] (cache) -- (robot);
+\draw[arrow] (cache.west) -- ++(-0.5,0) |- (mem.south west);
+\end{tikzpicture}
+\caption[System architecture]{End-to-end architecture. Green blocks form the
+always-on Tier-1 monitor; the red block is the selectively invoked
+vision-language model. The semantic cache closes the loop by feeding reused
+outputs back into temporal memory.}
+\label{fig:arch}
+\end{figure}
+
+\section{Semantic State Representation}
+\label{sec:meth-state}
+
+At each frame $t$ the system summarises the scene into a composite
+\emph{semantic state}
+\begin{equation}
+  Z_t = f\!\left(E_t,\, O_t,\, M_t\right),
+  \label{eq:state}
+\end{equation}
+where the three constituents are deliberately heterogeneous so that they
+capture complementary notions of ``what the scene is.''
+
+\begin{itemize}
+  \item $E_t \in \mathbb{R}^{d}$ is the $\ell_2$-normalised CLIP image
+  embedding~\cite{Radford2021CLIP} (for ViT-B/32, $d = 512$). It encodes
+  global, appearance-and-semantics content in a metric space where cosine
+  similarity is meaningful.
+  \item $O_t = \{(c_i, n_i)\}$ is the multiset of object classes $c_i$ and
+  their counts $n_i$ reported by the detector~\cite{Jocher2023YOLOv8}. It
+  encodes \emph{symbolic} scene content --- what kinds of things are present
+  and how many.
+  \item $M_t$ is the temporal semantic memory (Section~\ref{sec:meth-memory}),
+  a smoothed reference state that represents what the system currently
+  ``believes'' the scene to be.
+\end{itemize}
+
+The state is intentionally a fusion of a continuous embedding and a symbolic
+object set: embeddings are sensitive to holistic change but can be fooled by
+illumination, whereas object sets are robust to appearance but blind to
+configuration. Combining them yields a more faithful change signal than
+either alone.
+
+\section{Temporal Semantic Memory}
+\label{sec:meth-memory}
+
+A naive comparison of consecutive frames would react to every flicker of
+sensor noise. To suppress this, the system maintains an exponentially decayed
+memory of the embedding,
+\begin{equation}
+  M_t = \lambda\, M_{t-1} + (1-\lambda)\, E_t,
+  \qquad 0 < \lambda < 1,
+  \label{eq:memory}
+\end{equation}
+re-normalised to unit length after each update. The decay factor $\lambda$
+sets the memory horizon: values near $1$ produce a long, stable memory that
+ignores transient fluctuations, while smaller values track the scene more
+responsively. Drift is measured against this stabilised memory rather than
+against the immediately preceding frame, so that brief perturbations do not
+trigger spurious reasoning while sustained change still accumulates. When the
+VLM is invoked and the cache refreshed, the memory is anchored to the
+freshly reasoned-over state, marking it as the new reference.
+
+\section{Semantic Drift Estimation}
+\label{sec:meth-drift}
+
+The scalar drift signal fuses three bounded components,
+\begin{equation}
+  D_t = \alpha\, D_{\text{embed}} + \beta\, D_{\text{objects}}
+        + \gamma\, D_{\text{track}},
+  \qquad \alpha + \beta + \gamma = 1,
+  \label{eq:drift}
+\end{equation}
+with each term normalised to $[0,1]$ so that $D_t \in [0,1]$ and the weights
+form a convex combination.
+
+\paragraph{Embedding drift.} The cosine distance between the current
+embedding and the memory,
+\begin{equation}
+  D_{\text{embed}} = \tfrac{1}{2}\bigl(1 - \cos(E_t, M_{t-1})\bigr)
+  = \tfrac{1}{2}\bigl(1 - E_t^{\!\top} M_{t-1}\bigr),
+  \label{eq:dembed}
+\end{equation}
+which lies in $[0,1]$ for unit-norm vectors and grows as the holistic content
+departs from the remembered state.
+
+\paragraph{Object novelty.} Let $O_t$ and $O_{\text{ref}}$ be the current and
+reference object multisets. Their dissimilarity is the Jaccard-style novelty
+\begin{equation}
+  D_{\text{objects}} = 1 - \frac{\lvert O_t \cap O_{\text{ref}} \rvert}
+                                 {\lvert O_t \cup O_{\text{ref}} \rvert},
+  \label{eq:dobjects}
+\end{equation}
+computed over class-count pairs so that both the appearance of a new class and
+a change in the number of instances of an existing class register as novelty.
+
+\paragraph{Tracking-identity change.} Using the identities maintained by
+ByteTrack~\cite{Zhang2022ByteTrack}, let $\mathcal{I}_t$ be the set of active
+track identities. The identity-churn score
+\begin{equation}
+  D_{\text{track}} = \frac{\lvert \mathcal{I}_t \,\triangle\, \mathcal{I}_{\text{ref}} \rvert}
+                          {\lvert \mathcal{I}_t \cup \mathcal{I}_{\text{ref}} \rvert}
+  \label{eq:dtrack}
+\end{equation}
+measures the symmetric difference of identities, capturing objects that have
+entered or left the scene even when the class-level object set is unchanged
+(for example, one person replacing another).
+
+The three components are deliberately redundant in benign cases and
+complementary in adversarial ones: appearance-only change is caught by
+$D_{\text{embed}}$, count change by $D_{\text{objects}}$, and identity change
+by $D_{\text{track}}$. The weights $(\alpha, \beta, \gamma)$ are treated as
+hyperparameters and studied in the ablation of
+Section~\ref{sec:exp-ablation}.
+
+\section{Egocentric Operation and Camera-Motion Compensation}
+\label{sec:meth-egomotion}
+
+A robot perceives the world through an \emph{egocentric}, continuously moving
+camera, so the moving-camera case is the primary deployment regime rather than
+a corner case. Egomotion poses a specific threat to the drift signal: as the
+camera pans, tilts, or translates, the global appearance --- and hence the
+CLIP embedding $E_t$ --- changes even when the underlying scene is
+semantically static. Left uncorrected, this inflates $D_{\text{embed}}$ and
+produces \emph{false} transitions that would trigger needless reasoning,
+eroding the very compute savings the system is designed to deliver.
+
+Two design choices make the formulation egomotion-aware. First, two of the
+three drift components are inherently robust to camera motion: the object-set
+novelty $D_{\text{objects}}$ depends on \emph{what} is present, not on the
+viewpoint, and the tracking-identity churn $D_{\text{track}}$ is preserved by
+the multi-object tracker, which maintains identities across the smooth
+viewpoint shifts that egomotion induces. The fragile component is the holistic
+embedding term.
+
+Second, the embedding term is explicitly \emph{discounted} by the fraction of
+inter-frame change attributable to camera motion. A lightweight global-motion
+estimator --- sparse optical flow or a homography fit between consecutive
+downscaled frames --- yields a camera-motion fraction $c_t \in [0,1]$, where
+$c_t \to 1$ when the change between frames is well explained by a single
+global geometric transform (pure egomotion) and $c_t \to 0$ when a large flow
+residual indicates genuine, non-global content change. The corrected embedding
+drift is
+\begin{equation}
+  D_{\text{embed}}^{\text{ego}} = (1 - c_t)\, D_{\text{embed}},
+  \label{eq:dembed-ego}
+\end{equation}
+which is substituted for $D_{\text{embed}}$ in the fused signal of
+Equation~(\ref{eq:drift}) when operating on egocentric streams. Pure panning
+($c_t \!\approx\! 1$) is thereby suppressed, while a new object appearing in
+view ($c_t \!\approx\! 0$) still registers. The estimator runs on downscaled
+frames within the Tier-1 budget, so the correction adds negligible cost to the
+always-on monitor.
+
+This component is part of the system design for robotic deployment; its
+empirical validation on egocentric (head-mounted and mobile-robot) streams,
+where static-camera assumptions break down, is a dedicated part of the
+cross-domain evaluation plan of Section~\ref{sec:exp-crossdomain}.
+
+\section{Adaptive Compute-Allocation Policy}
+\label{sec:meth-policy}
+
+The drift signal is mapped to one of three compute tiers through two
+thresholds $0 < \tau_{\text{low}} < \tau_{\text{high}} < 1$:
+\begin{equation}
+  \text{Tier}(D_t) =
+  \begin{cases}
+    1 \;\; (\text{cache reuse, no VLM}) & D_t < \tau_{\text{low}},\\[2pt]
+    2 \;\; (\text{lightweight VLM}) & \tau_{\text{low}} \le D_t < \tau_{\text{high}},\\[2pt]
+    3 \;\; (\text{full VLM reasoning}) & D_t \ge \tau_{\text{high}}.
+  \end{cases}
+  \label{eq:policy}
+\end{equation}
+Tier~1 serves the cached output directly and costs nothing beyond the monitor.
+Tier~2 issues a cheaper VLM query (for example, a short prompt or reduced
+generation length) appropriate to a moderate change. Tier~3 performs full
+reasoning and refreshes the cache and memory. Algorithm~\ref{alg:scheduler}
+gives the complete per-frame procedure.
+
+\begin{algorithm}[htbp]
+\caption{Semantic-aware per-frame compute allocation}
+\label{alg:scheduler}
+\begin{algorithmic}[1]
+\Require frame $x_t$; thresholds $\tau_{\text{low}},\tau_{\text{high}}$;
+         weights $\alpha,\beta,\gamma$; decay $\lambda$
+\State $O_t \gets \textsc{Detect}(x_t)$;\quad
+       $\mathcal{I}_t \gets \textsc{Track}(O_t)$;\quad
+       $E_t \gets \textsc{CLIP}(x_t)$
+\State $D_{\text{embed}} \gets \tfrac{1}{2}(1 - E_t^{\!\top} M_{t-1})$
+\State $D_{\text{objects}} \gets 1 - \text{Jaccard}(O_t, O_{\text{ref}})$
+\State $D_{\text{track}} \gets \text{SymDiff}(\mathcal{I}_t, \mathcal{I}_{\text{ref}})$
+\State $D_t \gets \alpha D_{\text{embed}} + \beta D_{\text{objects}} + \gamma D_{\text{track}}$
+\If{$D_t < \tau_{\text{low}}$}
+  \State $y_t \gets \textsc{CacheLookup}()$ \Comment{Tier 1: reuse}
+\ElsIf{$D_t < \tau_{\text{high}}$}
+  \State $y_t \gets \textsc{VLM}_{\text{light}}(x_t)$;\;
+         \textsc{CacheUpdate}$(y_t)$ \Comment{Tier 2}
+\Else
+  \State $y_t \gets \textsc{VLM}_{\text{full}}(x_t)$;\;
+         \textsc{CacheUpdate}$(y_t)$;\;
+         $O_{\text{ref}},\mathcal{I}_{\text{ref}} \gets O_t,\mathcal{I}_t$ \Comment{Tier 3}
+\EndIf
+\State $M_t \gets \text{normalize}(\lambda M_{t-1} + (1-\lambda) E_t)$
+\State \Return $y_t$
+\end{algorithmic}
+\end{algorithm}
+
+\section{Selective Invocation and Semantic Caching}
+\label{sec:meth-cache}
+
+The semantic cache stores the most recent VLM output together with the state
+that produced it. On a Tier-1 frame the cached output is returned unchanged,
+preserving the information delivered to downstream tasks at zero reasoning
+cost. On Tier-2 and Tier-3 frames the cache is refreshed and, in the Tier-3
+case, the reference object set and track identities are re-anchored to the
+current frame so that subsequent drift is measured relative to the
+newly understood scene. This closes the feedback loop drawn in
+Figure~\ref{fig:arch}.
+
+\section{Semantic Compute Efficiency}
+\label{sec:meth-sce}
+
+Evaluating the scheduler requires a single figure of merit that rewards
+saving compute only insofar as semantic fidelity is preserved. We define
+\emph{Semantic Compute Efficiency} as
+\begin{equation}
+  \mathrm{SCE} = \frac{\text{SemanticRetention}}{\text{NormalizedComputeCost}},
+  \label{eq:sce}
+\end{equation}
+where \emph{SemanticRetention} is the average similarity between the output
+the system actually delivers (cached or freshly computed) and the output an
+every-frame oracle would deliver, and \emph{NormalizedComputeCost} is the
+total compute spent by the policy divided by that of the every-frame
+baseline. A policy that reasons on every frame has retention $1$ and
+normalised cost $1$, giving $\mathrm{SCE}=1$; a useful scheduler achieves
+$\mathrm{SCE} > 1$ by retaining most of the fidelity at a fraction of the
+cost. This metric is the primary axis of comparison in
+Chapter~\ref{ch:experiments}.
+
+\section{The Semantic Observatory and Policy-Discovery Methodology}
+\label{sec:meth-observatory}
+
+The thresholds and weights of the policy in Section~\ref{sec:meth-policy}
+could be set by intuition, but a stronger scientific stance is to
+\emph{discover} them from evidence about how semantic meaning actually evolves
+in a stream. To that end this thesis introduces the \emph{Semantic
+Observatory}: an instrument that consumes the per-frame log produced by a
+pipeline run and derives a suite of semantic-evolution signals that go beyond
+the instantaneous drift used by the scheduler. From the logged drift $D_t$ and
+object/track metadata it computes, per frame, the quantities listed in
+Table~\ref{tab:observatory-signals}, and it aggregates them into higher-level
+structure: contiguous \emph{stability windows} (sustained low drift),
+\emph{transition zones} (sustained high drift), per-track \emph{object
+persistence} records, and discrete \emph{semantic events}.
+
+\begin{table}[htbp]
+\centering
+\caption[Semantic Observatory signals]{Semantic-evolution signals derived by
+the Semantic Observatory from a pipeline run.}
+\label{tab:observatory-signals}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Signal} & \textbf{Definition} \\
+\midrule
+Semantic drift $D_t$        & Fused drift signal (Eq.~\ref{eq:drift}) \\
+Acceleration $A_t$          & $D_t - D_{t-1}$ \\
+Velocity                    & Smoothed rate of drift change \\
+Volatility $V_t$            & Variance of $D_t$ over a rolling window \\
+Scene entropy               & Shannon entropy of the object-class distribution \\
+Object persistence          & Per-track lifespan, in frames \\
+Stability windows           & Contiguous low-drift regions \\
+Transition zones            & Contiguous high-drift regions \\
+Semantic progress           & Cumulative semantic evolution \\
+VLM trigger density         & Rolling VLM invocation rate \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+These signals turn an opaque stream into an auditable record of \emph{why}
+each scheduling decision was taken, and they expose the statistical structure
+--- how long scenes stay stable, how abruptly transitions arrive, whether
+spikes coincide with camera motion --- that a good policy should exploit. The
+Observatory is deliberately \emph{read-only}: it observes and analyses but
+never alters the scheduler, which prevents the circularity of tuning a policy
+against a moving evaluation.
+
+The Observatory underpins a disciplined experimental protocol for deriving
+policies, summarised as a single loop:
+\begin{equation}
+  \textsf{Observe} \rightarrow \textsf{Hypothesise} \rightarrow
+  \textsf{Modify one variable} \rightarrow \textsf{Evaluate} \rightarrow
+  \textsf{Accept/Reject} \rightarrow \textsf{Record}.
+  \label{eq:protocol}
+\end{equation}
+Each iteration begins from Observatory evidence, advances a single falsifiable
+hypothesis (for example, ``camera motion inflates embedding drift''), changes
+exactly one element of the monitor or policy, and is accepted only if it
+improves SCE without degrading retention on held-out streams. Confining each
+experiment to one variable keeps the source of any change attributable, and
+recording every experiment --- observations, hypothesis, metrics, verdict ---
+builds the evidence trail that distinguishes a discovered policy from a guessed
+one. The scientific contribution of this thesis is therefore twofold: the
+specific scheduler of Section~\ref{sec:meth-policy}, and the Observatory-driven
+\emph{methodology} by which such schedulers can be derived and justified.

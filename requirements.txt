@@ -14,7 +14,11 @@ numpy>=1.24.0
 ultralytics>=8.0.0          # YOLOv8 nano
 
 # ── Tracking ───────────────────────────────────────────────
-boxmot>=10.0.0              # ByteTrack via boxmot
+# NOTE: boxmot v10-v18 have ByteTrack; v19+ changed API
+# For modern Python 3.12: use boxmot 10.x with PyTorch
+# Install separately to avoid dependency conflicts:
+# pip install boxmot==10.11.62 (last stable v10 release)
+# If using modern boxmot (v21+), update bytetrack_wrapper.py accordingly
 
 # ── Embeddings ─────────────────────────────────────────────
 # OpenAI CLIP — install via:

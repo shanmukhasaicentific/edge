@@ -1,0 +1,129 @@
+\chapter{Operational Guide and Reproducibility Manual}
+\label{app:operational}
+
+This appendix documents how to assemble the environment, run the pipeline, and
+interpret the outputs so that the experiments of Chapter~\ref{ch:experiments}
+can be reproduced.
+
+\section{Hardware and System Prerequisites}
+\label{sec:app-hardware}
+
+\begin{itemize}
+  \item A CUDA-capable GPU for the CLIP and VLM stages (experiments used a
+  Kaggle NVIDIA~T4 with 16\,GB memory); a commodity multi-core CPU suffices
+  for frame filtering and tracking.
+  \item Python~3.10 or later with the package set of
+  Section~\ref{sec:app-env}.
+  \item Sufficient disk for model weights (YOLOv8-n, CLIP ViT-B/32, and
+  Moondream2) and for per-run output logs.
+\end{itemize}
+
+\section{Environment Assembly and Dependency Registry}
+\label{sec:app-env}
+
+The core dependencies and their roles are listed in
+Table~\ref{tab:dependencies}. A minimal setup is shown below.
+
+\begin{lstlisting}[language=bash, caption={Environment setup.}]
+python -m venv .venv && source .venv/bin/activate   # or .venv\Scripts\activate on Windows
+pip install torch torchvision opencv-python
+pip install ultralytics            # YOLOv8
+pip install boxmot                 # ByteTrack
+pip install git+https://github.com/openai/CLIP.git
+pip install transformers           # Moondream2 weights via HF hub
+\end{lstlisting}
+
+\begin{table}[htbp]
+\centering
+\caption[Dependency registry]{Primary software dependencies.}
+\label{tab:dependencies}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Package} & \textbf{Component} & \textbf{Role} \\
+\midrule
+\texttt{torch}, \texttt{torchvision} & PyTorch & Tensor / model runtime \\
+\texttt{opencv-python}               & OpenCV  & Frame I/O and filtering \\
+\texttt{ultralytics}                 & YOLOv8-n & Object detection \\
+\texttt{boxmot}                      & ByteTrack & Multi-object tracking \\
+\texttt{CLIP}                        & CLIP ViT-B/32 & Semantic embedding \\
+\texttt{transformers}                & Moondream2 & Vision-language model \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Command-Line Execution}
+\label{sec:app-cli}
+
+\subsection{Running all baselines and the proposed scheduler}
+\label{sec:app-baseline}
+
+The five policies --- \texttt{every\_frame}, \texttt{fixed\_interval}
+($K=30$), \texttt{motion\_gating}, \texttt{embedding\_threshold}, and
+\texttt{threshold} (the proposed three-tier scheduler) --- are run on an
+identical stream by the \texttt{run\_all\_baselines.py} driver. To obtain the
+measured metrics used in Chapter~\ref{ch:experiments}, VLM execution must be
+\emph{enabled} (omit \texttt{--skip\_vlm}) and the frame budget left
+unbounded:
+
+\begin{lstlisting}[language=bash, caption={Run all five policies on the same video (VLM enabled, all frames).}]
+python scripts/run_all_baselines.py \
+    --video /path/to/video.mp4 \
+    --max_frames -1 \
+    --device cuda
+\end{lstlisting}
+
+\subsection{Individual runs and the threshold sweep}
+\label{sec:app-proposed}
+
+\begin{lstlisting}[language=bash, caption={Individual policy runs and the ablation sweep.}]
+# Proposed three-tier scheduler (policy "threshold")
+python scripts/run_pipeline.py \
+    --video /path/to/video.mp4 \
+    --policy threshold \
+    --tau_low 0.15 --tau_high 0.40 \
+    --alpha 0.5 --beta 0.3 --gamma 0.2 \
+    --decay_lambda 0.90 \
+    --vlm moondream \
+    --max_frames -1 \
+    --experiment_name proposed_threshold \
+    --output_dir experiments/proposed_threshold/
+
+# A single baseline, e.g. embedding-threshold
+python scripts/run_pipeline.py \
+    --video /path/to/video.mp4 \
+    --policy embedding_threshold --tau 0.30 \
+    --experiment_name baseline_embed_threshold \
+    --output_dir experiments/baseline_embed_threshold/
+
+# Sweep the lower threshold for the ablation
+python scripts/sweep_thresholds.py --param tau_low --range 0.05 0.35 0.05
+\end{lstlisting}
+
+\section{Output Structure}
+\label{sec:app-output}
+
+Each run writes to its \texttt{--out} directory:
+
+\begin{itemize}
+  \item \texttt{metrics.json} --- aggregate metrics (VLM call rate, latency,
+  throughput, peak memory, retention, SCE).
+  \item \texttt{frame\_log.csv} --- per-frame drift components $D_t$,
+  $D_{\text{embed}}$, $D_{\text{objects}}$, $D_{\text{track}}$, the chosen
+  tier, and latency; the input consumed by the Semantic Observatory.
+  \item \texttt{outputs/} --- delivered VLM captions (cached or freshly
+  generated) for qualitative inspection.
+\end{itemize}
+
+The aggregation script collates every run's \texttt{metrics.json} into the
+comparison table. The Semantic Observatory
+(Section~\ref{sec:arch-observatory}) is then run post hoc on any
+\texttt{frame\_log.csv} to produce the semantic-evolution analytics, figures,
+and dashboard:
+
+\begin{lstlisting}[language=bash, caption={Post-hoc Semantic Observatory analysis.}]
+python scripts/run_observatory.py \
+    --frame_log experiments/proposed_threshold/frame_log.csv \
+    --output_dir results/observatory/proposed/ \
+    --experiment_name proposed_threshold
+\end{lstlisting}

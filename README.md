@@ -1,5 +1,37 @@
 # Adaptive Semantic Compute Allocation for Edge Robotic Vision-Language Systems
 
+**Python 3.10+** | **Local + Kaggle + Colab** | **Production-Ready**
+
+---
+
+## Quick Setup
+
+### Local Machine
+```bash
+pip install -r requirements.txt
+pip install boxmot==10.11.62
+pip install git+https://github.com/openai/CLIP.git
+python autoresearch-master/train.py --phase threshold_sweep --multi-gpu
+```
+
+### Kaggle Notebook
+```python
+import os
+os.environ["TEST_VIDEO_DIR"] = "/kaggle/input/videos"
+os.environ["OUTPUT_DIR"] = "/kaggle/working/results"
+os.environ["CHECKPOINT_DIR"] = "/kaggle/working/checkpoints"
+
+# Then import and run
+from src.config import print_environment_info
+print_environment_info()
+```
+
+### Colab
+```python
+!pip install -r /content/edge-vlm-thesis/requirements.txt
+!pip install boxmot==10.11.62
+!pip install git+https://github.com/openai/CLIP.git
+```
 
 ---
 
