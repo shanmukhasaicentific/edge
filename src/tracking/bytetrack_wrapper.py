@@ -2,9 +2,13 @@
 src/tracking/bytetrack_wrapper.py
 
 ByteTrack multi-object tracker wrapper.
-Uses boxmot library for ByteTrack implementation.
+Compatible with BoxMOT v10-v21+ (handles API changes).
 
 Track identity changes contribute to the γ·D_track component of semantic drift.
+
+Migration notes:
+- BoxMOT v10-v18: from boxmot import ByteTrack (class-based)
+- BoxMOT v19+: from boxmot.trackers.byte_tracker import BYTETracker (class) or boxmot.track (function)
 """
 
 import time
@@ -55,25 +59,59 @@ class ByteTrackWrapper:
         frame_rate: int = 30,
     ):
         """Initialize ByteTrack wrapper (compatible with boxmot v10-v21+)."""
+        self.track_thresh = track_thresh
+        self.track_buffer = track_buffer
+        self.match_thresh = match_thresh
+        self.frame_rate = frame_rate
+        self._prev_ids: Set[int] = set()
+
+        # Try to load tracker (handles both old and new BoxMOT APIs)
+        self.tracker = self._init_tracker()
+
+    def _init_tracker(self):
+        """Initialize tracker, handling both old (v10-v18) and new (v19+) BoxMOT APIs."""
         try:
-            # Try modern boxmot API (v10-v18)
+            # Try old API: v10-v18
             from boxmot import ByteTrack
-            self.tracker = ByteTrack(
-                track_thresh=track_thresh,
-                track_buffer=track_buffer,
-                match_thresh=match_thresh,
-                frame_rate=frame_rate,
+            print("✓ Using BoxMOT v10-v18 API (from boxmot import ByteTrack)")
+            return ByteTrack(
+                track_thresh=self.track_thresh,
+                track_buffer=self.track_buffer,
+                match_thresh=self.match_thresh,
+                frame_rate=self.frame_rate,
             )
         except ImportError:
-            # Fallback for future boxmot versions
-            # If you get here, boxmot.ByteTrack is not available
-            # See: https://github.com/mikel-brostrom/yolo_tracking
-            print("ERROR: boxmot.ByteTrack not found.")
-            print("Recommended: pip install boxmot==10.11.62")
-            print("Or update this wrapper for your boxmot version.")
-            raise
+            pass
 
-        self._prev_ids: Set[int] = set()
+        try:
+            # Try new API: v19+
+            from boxmot.trackers.byte_tracker import BYTETracker
+            print("✓ Using BoxMOT v19+ API (from boxmot.trackers.byte_tracker import BYTETracker)")
+            return BYTETracker(
+                track_thresh=self.track_thresh,
+                track_buffer=self.track_buffer,
+                match_thresh=self.match_thresh,
+                frame_rate=self.frame_rate,
+            )
+        except ImportError:
+            pass
+
+        # If neither works, raise helpful error
+        print("\n" + "="*70)
+        print("ERROR: Cannot import ByteTrack from BoxMOT")
+        print("="*70)
+        print("\nTried:")
+        print("  1. from boxmot import ByteTrack (v10-v18)")
+        print("  2. from boxmot.trackers.byte_tracker import BYTETracker (v19+)")
+        print("\nSolutions:")
+        print("  Option A: Pin to working version")
+        print("    pip install boxmot==10.11.62")
+        print("\n  Option B: Check BoxMOT version")
+        print("    pip show boxmot")
+        print("\n  Option C: Update BoxMOT to latest")
+        print("    pip install --upgrade boxmot")
+        print("="*70)
+        raise ImportError("BoxMOT ByteTrack not found in any supported version")
 
     def update(self, detections: np.ndarray, frame: np.ndarray, frame_id: int = 0) -> TrackingResult:
         """
